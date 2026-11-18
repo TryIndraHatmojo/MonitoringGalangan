@@ -38,6 +38,7 @@ export function Shell({ title, organization, actions, children }: { title: strin
                     <nav aria-label="Navigasi utama">
                         <Link href="/">Organisasi saya</Link>
                         {orgPath && <Link href={orgPath + '/projects'}>Proyek</Link>}
+                        <Link href="/devices">Perangkat API</Link>
                     </nav>
                 </div>
                 <div className="sidebar-user">

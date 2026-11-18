@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\DeviceController;
 use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\WbsController;
@@ -21,6 +22,8 @@ Route::middleware(['auth', ActiveAccount::class])->group(function (): void {
     Route::post('logout', [AuthController::class, 'logout'])->name('logout');
     Route::post('org', [OrganizationController::class, 'create']);
     Route::patch('accounts/{account}', [OrganizationController::class, 'account']);
+    Route::get('devices', [DeviceController::class, 'index']);
+    Route::delete('devices/{device}', [DeviceController::class, 'revoke']);
 
     Route::prefix('org/{organization}')->group(function (): void {
         Route::get('access', [OrganizationController::class, 'directory'])->name('org.access');
