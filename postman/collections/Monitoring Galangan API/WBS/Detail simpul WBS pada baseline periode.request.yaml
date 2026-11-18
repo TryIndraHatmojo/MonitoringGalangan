@@ -1,0 +1,23 @@
+$kind: http-request
+url: '{{baseUrl}}/wbs-items/:itemId?period={{period}}'
+method: GET
+headers:
+  Accept: application/json
+queryParams:
+  - key: period
+    value: '{{period}}'
+pathVariables:
+  - key: itemId
+    value: '{{activeItemId}}'
+examples: './.resources/Detail simpul WBS pada baseline periode.resources/examples'
+order: 2000
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Detail WBS mempertahankan ID dan periode', () => {
+        pm.response.to.have.status(200);
+        const { data, meta } = pm.response.json();
+        pm.expect(data.id).to.eql(pm.collectionVariables.get('activeItemId'));
+        pm.expect(meta.period).to.eql(pm.environment.get('period'));
+        pm.expect(data.project_weight).to.match(/^\d+\.\d{3}$/);
+      });

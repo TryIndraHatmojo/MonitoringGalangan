@@ -1,0 +1,16 @@
+$kind: http-request
+url: '{{baseUrl}}/me'
+method: GET
+headers:
+  Accept: application/json
+examples: './.resources/Lihat profil dan cakupan token.resources/examples'
+order: 2000
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Profil berada dalam organisasi token', () => {
+        pm.response.to.have.status(200);
+        const { data } = pm.response.json();
+        pm.expect(data.organization.slug).to.eql(pm.environment.get('organization'));
+        pm.expect(data.permissions).to.be.an('array').that.includes('projects.view');
+      });

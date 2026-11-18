@@ -1,0 +1,77 @@
+$kind: http-example
+name: Hasil terurut berdasarkan nomor proyek lalu ID.
+request:
+  url: "{{baseUrl}}/projects?page=1&per_page=25"
+  method: GET
+  headers:
+    - key: Authorization
+      value: Bearer <token>
+      description: "Added as a part of security scheme: bearer"
+    - key: Accept
+      value: application/json
+  queryParams:
+    page: "1"
+    per_page: "25"
+  body:
+    type: text
+    content: ""
+response:
+  statusCode: 200
+  statusText: OK
+  headers:
+    Content-Type: application/json
+  body:
+    type: json
+    content: |-
+      {
+        "data": [
+          {
+            "id": "string",
+            "organization_id": "string",
+            "number": "string",
+            "name": "string",
+            "ship_name": "string",
+            "ship_type": "string",
+            "tonnage_gt": "573188738.334",
+            "owner": "string",
+            "shipyard": "string",
+            "start_date": "1948-06-13",
+            "target_date": "2009-12-28",
+            "status": "archived",
+            "wbs_restricted": false,
+            "contract_amount": "2.25",
+            "currency": "string",
+            "manager_id": "string",
+            "baseline_approver_id": "string",
+            "created_at": "1972-08-16T13:02:46.683Z",
+            "updated_at": "1956-03-25T02:19:42.571Z"
+          },
+          {
+            "id": "string",
+            "organization_id": "string",
+            "number": "string",
+            "name": "string",
+            "ship_name": "string",
+            "ship_type": "string",
+            "tonnage_gt": "0.858",
+            "owner": "string",
+            "shipyard": "string",
+            "start_date": "1987-08-24",
+            "target_date": "2006-07-18",
+            "status": "closed",
+            "wbs_restricted": true,
+            "contract_amount": "709338.13",
+            "currency": "string",
+            "manager_id": "string",
+            "baseline_approver_id": "string",
+            "created_at": "2003-02-10T02:10:03.913Z",
+            "updated_at": "2025-01-13T05:08:56.254Z"
+          }
+        ],
+        "meta": {
+          "page": 8060,
+          "per_page": 87,
+          "total": 5195
+        }
+      }
+order: 1000

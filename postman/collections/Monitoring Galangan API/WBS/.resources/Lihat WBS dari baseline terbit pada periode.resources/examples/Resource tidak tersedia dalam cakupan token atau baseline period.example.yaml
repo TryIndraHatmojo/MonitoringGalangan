@@ -1,0 +1,58 @@
+$kind: http-example
+name: Resource tidak tersedia dalam cakupan token atau baseline periode.
+request:
+  url: "{{baseUrl}}/projects/:projectId/wbs?period=2026-10&page=1&per_page=25"
+  method: GET
+  headers:
+    - key: Authorization
+      value: Bearer <token>
+      description: "Added as a part of security scheme: bearer"
+    - key: Accept
+      value: application/json
+  queryParams:
+    period: 2026-10
+    page: "1"
+    per_page: "25"
+  pathVariables:
+    - key: projectId
+      value: 01KBMTRREGSW4PG4TGVJF0KA1Y
+      disabled: false
+      description: "(Required) "
+  body:
+    type: text
+    content: ""
+response:
+  statusCode: 404
+  statusText: Not Found
+  headers:
+    - key: X-Request-Id
+      value: 5e5b16bc-1d51-179e-ae12-269177e4e0f7
+      disabled: false
+      description: ID untuk penelusuran error.
+    - key: Content-Type
+      value: application/json
+  body:
+    type: json
+    content: |-
+      {
+        "error": {
+          "code": "validation_failed",
+          "message": "string",
+          "request_id": "fe40f108-cc1f-2933-514f-0135eee892da",
+          "fields": {
+            "key_0": [
+              "string",
+              "string"
+            ],
+            "key_1": [
+              "string",
+              "string"
+            ],
+            "key_2": [
+              "string",
+              "string"
+            ]
+          }
+        }
+      }
+order: 4000

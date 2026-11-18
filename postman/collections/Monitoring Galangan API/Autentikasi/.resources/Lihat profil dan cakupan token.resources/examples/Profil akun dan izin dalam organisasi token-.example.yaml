@@ -1,0 +1,39 @@
+$kind: http-example
+name: Profil akun dan izin dalam organisasi token.
+request:
+  url: "{{baseUrl}}/me"
+  method: GET
+  headers:
+    - key: Authorization
+      value: Bearer <token>
+      description: "Added as a part of security scheme: bearer"
+    - key: Accept
+      value: application/json
+  body:
+    type: text
+    content: ""
+response:
+  statusCode: 200
+  statusText: OK
+  headers:
+    Content-Type: application/json
+  body:
+    type: json
+    content: |-
+      {
+        "data": {
+          "id": "string",
+          "name": "string",
+          "email": "3c0G7MSJtZ1B3M@IJxDsvvXbHgYJxyVgYhUiVvffkTgE.jhs",
+          "organization": {
+            "id": "string",
+            "slug": "string",
+            "name": "string"
+          },
+          "permissions": [
+            "string",
+            "string"
+          ]
+        }
+      }
+order: 1000

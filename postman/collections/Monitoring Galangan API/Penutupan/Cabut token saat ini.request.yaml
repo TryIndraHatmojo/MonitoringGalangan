@@ -1,0 +1,11 @@
+$kind: http-request
+url: '{{baseUrl}}/auth/tokens/current'
+method: DELETE
+headers:
+  Accept: application/json
+examples: './.resources/Cabut token saat ini.resources/examples'
+order: 1000
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Pencabutan token berhasil', () => pm.response.to.have.status(204));

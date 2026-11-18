@@ -1,0 +1,27 @@
+name: Lokal Contoh
+values:
+  - key: baseUrl
+    value: 'http://127.0.0.1:8000/api/v1'
+    enabled: true
+  - key: email
+    value: ''
+    enabled: true
+  - key: password
+    value: ''
+    enabled: true
+    type: secret
+  - key: organization
+    value: ferry-demo
+    enabled: true
+  - key: deviceId
+    value: postman-local
+    enabled: true
+  - key: projectNumber
+    value: DEMO-01
+    enabled: true
+  - key: period
+    value: '2026-10'
+    enabled: true
+  - key: expectedPlanned
+    value: '30.693'
+    enabled: true

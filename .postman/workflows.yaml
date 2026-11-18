@@ -1,0 +1,6 @@
+workflows:
+  syncSpecToCollection:
+    - spec: ../postman/specs/monitoring-galangan.openapi.yaml
+      collection: ../postman/collections/Monitoring Galangan API
+      options:
+        folderStrategy: Tags

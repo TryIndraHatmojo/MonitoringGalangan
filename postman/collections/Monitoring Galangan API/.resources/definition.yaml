@@ -1,0 +1,9 @@
+$kind: collection
+description: API baca Paket 01–02. Token berlaku 30 hari dan hanya berlaku untuk satu organisasi.
+variables:
+  baseUrl: 'http://127.0.0.1:8000/api/v1'
+  bearerToken: ''
+auth:
+  type: bearer
+  credentials:
+    token: '{{bearerToken}}'

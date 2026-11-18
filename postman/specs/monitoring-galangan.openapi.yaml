@@ -1,0 +1,377 @@
+openapi: 3.1.0
+info:
+  title: Monitoring Galangan API
+  version: 1.0.0
+  description: API baca Paket 01–02. Token berlaku 30 hari dan hanya berlaku untuk satu organisasi.
+servers:
+  - url: http://127.0.0.1:8000/api/v1
+security:
+  - bearer: []
+
+paths:
+  /auth/tokens:
+    post:
+      operationId: issueDeviceToken
+      summary: Terbitkan token perangkat
+      tags: [Autentikasi]
+      description: Penerbitan ulang untuk perangkat yang sama mengganti token sebelumnya. Batas 10 permintaan per menit per IP.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceLogin'
+            example:
+              email: admin@example.test
+              password: '<sandi-lokal>'
+              organization: ferry-demo
+              device_id: postman-local
+              device_name: Postman lokal
+      responses:
+        '201':
+          description: Token terbit. Simpan nilai token saat diterima.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [token, token_type, expires_at]
+                    properties:
+                      token: {type: string}
+                      token_type: {type: string, const: Bearer}
+                      expires_at: {type: string, format: date-time}
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/Invalid' }
+        '429': { $ref: '#/components/responses/Limited' }
+  /auth/tokens/current:
+    delete:
+      operationId: revokeDeviceToken
+      summary: Cabut token saat ini
+      tags: [Autentikasi]
+      responses:
+        '204':
+          description: Token dicabut.
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '429': { $ref: '#/components/responses/Limited' }
+  /me:
+    get:
+      operationId: currentUser
+      summary: Lihat profil dan cakupan token
+      tags: [Autentikasi]
+      responses:
+        '200':
+          description: Profil akun dan izin dalam organisasi token.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [id, name, email, organization, permissions]
+                    properties:
+                      id: {type: string}
+                      name: {type: string}
+                      email: {type: string, format: email}
+                      organization:
+                        type: object
+                        required: [id, slug, name]
+                        properties:
+                          id: {type: string}
+                          slug: {type: string}
+                          name: {type: string}
+                      permissions:
+                        type: array
+                        items: {type: string}
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '429': { $ref: '#/components/responses/Limited' }
+  /projects:
+    get:
+      operationId: listProjects
+      summary: Daftar proyek yang dapat diakses
+      tags: [Proyek]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+      responses:
+        '200':
+          description: Hasil terurut berdasarkan nomor proyek lalu ID.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Project' }
+                  meta: { $ref: '#/components/schemas/Pagination' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/Invalid' }
+        '429': { $ref: '#/components/responses/Limited' }
+  /projects/{projectId}:
+    get:
+      operationId: getProject
+      summary: Detail proyek
+      tags: [Proyek]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Metadata proyek.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/Project' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/Missing' }
+        '429': { $ref: '#/components/responses/Limited' }
+  /projects/{projectId}/wbs:
+    get:
+      operationId: listProjectWbs
+      summary: Lihat WBS dari baseline terbit pada periode
+      tags: [WBS]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Period'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+      responses:
+        '200':
+          description: Jika baseline belum terbit, daftar kosong dan baseline_status bernilai not_published.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/WbsNode' }
+                  meta: { $ref: '#/components/schemas/WbsMeta' }
+              example:
+                data: []
+                meta:
+                  page: 1
+                  per_page: 25
+                  total: 0
+                  period: '2026-09'
+                  baseline_id: null
+                  baseline_status: not_published
+                  mode: null
+                  planned_pct: null
+                  target_source: null
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/Missing' }
+        '422': { $ref: '#/components/responses/Invalid' }
+        '429': { $ref: '#/components/responses/Limited' }
+  /wbs-items/{itemId}:
+    get:
+      operationId: getWbsItem
+      summary: Detail simpul WBS pada baseline periode
+      tags: [WBS]
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - $ref: '#/components/parameters/Period'
+      responses:
+        '200':
+          description: Kategori, subkategori, atau item pekerjaan.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { $ref: '#/components/schemas/WbsNode' }
+                  meta:
+                    type: object
+                    required: [period, project_id, baseline_id]
+                    properties:
+                      period: {type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$'}
+                      project_id: {type: string}
+                      baseline_id: {type: string}
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/Missing' }
+        '422': { $ref: '#/components/responses/Invalid' }
+        '429': { $ref: '#/components/responses/Limited' }
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: Laravel Sanctum
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 1000000, default: 1}
+    PerPage:
+      name: per_page
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema: {type: string, example: '01KBMTRREGSW4PG4TGVJF0KA1Y'}
+    Period:
+      name: period
+      in: query
+      description: Bulan rencana. Default bulan berjalan di Asia/Jakarta.
+      schema: {type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$', example: '2026-10'}
+  headers:
+    RequestId:
+      description: ID untuk penelusuran error.
+      schema: {type: string, format: uuid}
+  responses:
+    Unauthenticated:
+      description: Kredensial atau token tidak valid, kedaluwarsa, atau dicabut.
+      headers:
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Akun mengetahui proyek tetapi tidak memiliki izin WBS yang diperlukan.
+      headers:
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Missing:
+      description: Resource tidak tersedia dalam cakupan token atau baseline periode.
+      headers:
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Invalid:
+      description: Salah satu nilai permintaan tidak valid.
+      headers:
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Limited:
+      description: Batas permintaan tercapai.
+      headers:
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
+        Retry-After:
+          description: Detik sebelum percobaan berikutnya.
+          schema: {type: integer}
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    DeviceLogin:
+      type: object
+      required: [email, password, organization, device_id, device_name]
+      properties:
+        email: {type: string, format: email, maxLength: 255}
+        password: {type: string, format: password, maxLength: 255, writeOnly: true}
+        organization: {type: string, maxLength: 100}
+        device_id: {type: string, maxLength: 100}
+        device_name: {type: string, maxLength: 150}
+    Project:
+      type: object
+      required: [id, organization_id, number, name, ship_name, ship_type, tonnage_gt, owner, shipyard, start_date, target_date, status, wbs_restricted]
+      properties:
+        id: {type: string}
+        organization_id: {type: string}
+        number: {type: string}
+        name: {type: string}
+        ship_name: {type: string}
+        ship_type: {type: string}
+        tonnage_gt: {type: [string, 'null'], pattern: '^\d+\.\d{3}$'}
+        owner: {type: string}
+        shipyard: {type: string}
+        start_date: {type: string, format: date}
+        target_date: {type: string, format: date}
+        contract_amount: {type: [string, 'null'], pattern: '^\d+\.\d{2}$', description: Tersedia dengan izin nilai kontrak.}
+        currency: {type: [string, 'null']}
+        manager_id: {type: [string, 'null']}
+        baseline_approver_id: {type: [string, 'null']}
+        status: {type: string, enum: [active, closed, archived]}
+        wbs_restricted: {type: boolean}
+        created_at: {type: [string, 'null'], format: date-time}
+        updated_at: {type: [string, 'null'], format: date-time}
+    Pagination:
+      type: object
+      required: [page, per_page, total]
+      properties:
+        page: {type: integer, minimum: 1}
+        per_page: {type: integer, minimum: 1, maximum: 100}
+        total: {type: integer, minimum: 0}
+    WbsMeta:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          required: [period, baseline_id, baseline_status, mode, planned_pct, target_source]
+          properties:
+            period: {type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$'}
+            baseline_id: {type: [string, 'null']}
+            baseline_status: {type: string, enum: [published, not_published]}
+            mode: {enum: [item, legacy, null]}
+            planned_pct: {type: [string, 'null'], pattern: '^\d+\.\d{3}$'}
+            target_source: {type: [string, 'null']}
+    WbsNode:
+      type: object
+      required: [id, parent_id, type, code, name, weight, position, project_weight, planned_pct, planned_contribution_pp, level]
+      properties:
+        id: {type: string, format: uuid}
+        parent_id: {type: [string, 'null'], format: uuid}
+        type: {type: string, enum: [category, group, item]}
+        code: {type: string}
+        name: {type: string}
+        weight: {type: string, pattern: '^\d+\.\d{6}$', description: Persen terhadap induk.}
+        position: {type: integer}
+        volume: {type: [string, 'null'], pattern: '^\d+\.\d{6}$'}
+        unit: {type: [string, 'null']}
+        start_date: {type: [string, 'null'], format: date}
+        end_date: {type: [string, 'null'], format: date}
+        pic_id: {type: [string, 'null']}
+        reviewer_role: {type: [string, 'null']}
+        method: {enum: [direct, stages, null]}
+        source: {type: [string, 'null']}
+        stages:
+          type: array
+          items:
+            type: object
+            required: [name, weight]
+            properties:
+              name: {type: string}
+              weight: {type: string, pattern: '^\d+\.\d{6}$'}
+        level: {type: integer, minimum: 0}
+        project_weight: {type: string, pattern: '^\d+\.\d{3}$'}
+        planned_pct: {type: [string, 'null'], pattern: '^\d+\.\d{3}$', description: Target fisik item. Null jika target belum tersedia.}
+        planned_contribution_pp: {type: [string, 'null'], pattern: '^\d+\.\d{3}$', description: Poin persentase terhadap proyek.}
+        target_source: {type: [string, 'null']}
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code: {type: string, enum: [unauthenticated, forbidden, not_found, validation_failed, rate_limited, request_failed]}
+            message: {type: string}
+            request_id: {type: string, format: uuid}
+            fields:
+              type: object
+              additionalProperties:
+                type: array
+                items: {type: string}

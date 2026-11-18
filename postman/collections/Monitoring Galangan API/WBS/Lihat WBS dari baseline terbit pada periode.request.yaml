@@ -1,0 +1,30 @@
+$kind: http-request
+url: '{{baseUrl}}/projects/:projectId/wbs?period={{period}}&page=1&per_page=25'
+method: GET
+headers:
+  Accept: application/json
+queryParams:
+  - key: period
+    value: '{{period}}'
+  - key: page
+    value: '1'
+  - key: per_page
+    value: '25'
+pathVariables:
+  - key: projectId
+    value: '{{activeProjectId}}'
+examples: './.resources/Lihat WBS dari baseline terbit pada periode.resources/examples'
+order: 1000
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('WBS mengikuti baseline terbit dan periode', () => {
+        pm.response.to.have.status(200);
+        const { data, meta } = pm.response.json();
+        pm.expect(meta.period).to.eql(pm.environment.get('period'));
+        pm.expect(meta.baseline_status).to.eql('published');
+        pm.expect(meta.planned_pct).to.eql(pm.environment.get('expectedPlanned'));
+        const item = data.find(node => node.type === 'item');
+        pm.expect(item).to.exist;
+        pm.collectionVariables.set('activeItemId', item.id);
+      });

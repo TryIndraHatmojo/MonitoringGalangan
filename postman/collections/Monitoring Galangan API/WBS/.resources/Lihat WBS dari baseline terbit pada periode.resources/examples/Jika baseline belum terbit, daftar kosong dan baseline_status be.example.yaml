@@ -1,0 +1,46 @@
+$kind: http-example
+name: Jika baseline belum terbit, daftar kosong dan baseline_status bernilai not_published.
+request:
+  url: "{{baseUrl}}/projects/:projectId/wbs?period=2026-10&page=1&per_page=25"
+  method: GET
+  headers:
+    - key: Authorization
+      value: Bearer <token>
+      description: "Added as a part of security scheme: bearer"
+    - key: Accept
+      value: application/json
+  queryParams:
+    period: 2026-10
+    page: "1"
+    per_page: "25"
+  pathVariables:
+    - key: projectId
+      value: 01KBMTRREGSW4PG4TGVJF0KA1Y
+      disabled: false
+      description: "(Required) "
+  body:
+    type: text
+    content: ""
+response:
+  statusCode: 200
+  statusText: OK
+  headers:
+    Content-Type: application/json
+  body:
+    type: json
+    content: |-
+      {
+        "data": [],
+        "meta": {
+          "page": 1,
+          "per_page": 25,
+          "total": 0,
+          "period": "2026-09",
+          "baseline_id": null,
+          "baseline_status": "not_published",
+          "mode": null,
+          "planned_pct": null,
+          "target_source": null
+        }
+      }
+order: 1000

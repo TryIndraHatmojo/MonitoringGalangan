@@ -1,0 +1,36 @@
+$kind: http-request
+description: Penerbitan ulang untuk perangkat yang sama mengganti token sebelumnya.
+url: '{{baseUrl}}/auth/tokens'
+method: POST
+headers:
+  Content-Type: application/json
+  Accept: application/json
+auth:
+  type: noauth
+body:
+  type: json
+  content: '{}'
+examples: './.resources/Terbitkan token perangkat.resources/examples'
+order: 1000
+scripts:
+  - type: beforeRequest
+    code: |-
+      pm.request.body.update(JSON.stringify({
+        email: pm.environment.get('email'),
+        password: pm.environment.get('password'),
+        organization: pm.environment.get('organization'),
+        device_id: pm.environment.get('deviceId'),
+        device_name: 'Postman lokal',
+      }));
+  - type: afterResponse
+    code: |-
+      pm.test('Token perangkat terbit', () => pm.response.to.have.status(201));
+      if (pm.response.code === 201) {
+        const { data } = pm.response.json();
+        pm.test('Skema token bearer dan batas berlaku', () => {
+          pm.expect(data.token_type).to.eql('Bearer');
+          pm.expect(data.token).to.be.a('string').and.not.empty;
+          pm.expect(Date.parse(data.expires_at)).to.be.above(Date.now());
+        });
+        pm.collectionVariables.set('bearerToken', data.token);
+      }

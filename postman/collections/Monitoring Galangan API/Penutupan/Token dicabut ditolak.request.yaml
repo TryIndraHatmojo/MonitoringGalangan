@@ -1,0 +1,15 @@
+$kind: http-request
+url: '{{baseUrl}}/me'
+method: GET
+headers:
+  Accept: application/json
+order: 2000
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Token yang dicabut tidak dapat dipakai lagi', () => {
+        pm.response.to.have.status(401);
+        pm.expect(pm.response.json().error.code).to.eql('unauthenticated');
+        pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty;
+      });
+      pm.collectionVariables.unset('bearerToken');

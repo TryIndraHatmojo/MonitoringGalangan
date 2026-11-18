@@ -1,0 +1,22 @@
+$kind: http-request
+url: '{{baseUrl}}/projects?page=1&per_page=25'
+method: GET
+headers:
+  Accept: application/json
+queryParams:
+  page: '1'
+  per_page: '25'
+examples: './.resources/Daftar proyek yang dapat diakses.resources/examples'
+order: 1000
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Daftar proyek berhalaman', () => {
+        pm.response.to.have.status(200);
+        const { data, meta } = pm.response.json();
+        pm.expect(data).to.be.an('array');
+        pm.expect(meta).to.include({ page: 1, per_page: 25 });
+        const project = data.find(item => item.number === pm.environment.get('projectNumber'));
+        pm.expect(project).to.exist;
+        pm.collectionVariables.set('activeProjectId', project.id);
+      });

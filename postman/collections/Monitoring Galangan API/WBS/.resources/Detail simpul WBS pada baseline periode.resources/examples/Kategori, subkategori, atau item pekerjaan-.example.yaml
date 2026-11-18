@@ -1,0 +1,69 @@
+$kind: http-example
+name: Kategori, subkategori, atau item pekerjaan.
+request:
+  url: "{{baseUrl}}/wbs-items/:itemId?period=2026-10"
+  method: GET
+  headers:
+    - key: Authorization
+      value: Bearer <token>
+      description: "Added as a part of security scheme: bearer"
+    - key: Accept
+      value: application/json
+  queryParams:
+    period: 2026-10
+  pathVariables:
+    - key: itemId
+      value: 5e5b16bc-1d51-179e-ae12-269177e4e0f7
+      disabled: false
+      description: "(Required) "
+  body:
+    type: text
+    content: ""
+response:
+  statusCode: 200
+  statusText: OK
+  headers:
+    Content-Type: application/json
+  body:
+    type: json
+    content: |-
+      {
+        "data": {
+          "id": "78ccca82-b171-734a-f008-e4f8496bfc80",
+          "parent_id": "e023f766-8296-2468-7076-897d10174410",
+          "type": "category",
+          "code": "string",
+          "name": "string",
+          "weight": "97.796955",
+          "position": 262,
+          "project_weight": "3.566",
+          "planned_pct": "0.838",
+          "planned_contribution_pp": "8109.172",
+          "level": 5678,
+          "volume": "13794855243.918511",
+          "unit": "string",
+          "start_date": "2022-11-28",
+          "end_date": "1950-11-21",
+          "pic_id": "string",
+          "reviewer_role": "string",
+          "method": "string",
+          "source": "string",
+          "stages": [
+            {
+              "name": "string",
+              "weight": "4018587.782594"
+            },
+            {
+              "name": "string",
+              "weight": "9.147042"
+            }
+          ],
+          "target_source": "string"
+        },
+        "meta": {
+          "period": "4942-12",
+          "project_id": "string",
+          "baseline_id": "string"
+        }
+      }
+order: 1000
