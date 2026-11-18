@@ -2,6 +2,8 @@
 
 Rencana ini menjadi acuan implementasi aplikasi web responsif dan backend REST API bagi konsumen React Native. MVP web mencakup progres dan monitoring biaya dasar. Keputusan hasil konfirmasi, perbedaan terhadap requirement awal, serta penanggung jawab tindak lanjut tercatat di [00-konfirmasi-kebutuhan.md](00-konfirmasi-kebutuhan.md).
 
+Panduan pengembangan tersedia di [Setup Windows 11](../docs/setup-windows.md).
+
 ## Paket pekerjaan
 
 | Urutan | Rencana | Keluaran saat dijalankan | Dependensi |
