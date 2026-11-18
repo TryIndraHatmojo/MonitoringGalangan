@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\WbsController;
 use App\Http\Middleware\ActiveAccount;
 use Illuminate\Support\Facades\Route;
 
@@ -35,6 +36,12 @@ Route::middleware(['auth', ActiveAccount::class])->group(function (): void {
             Route::put('members', [ProjectController::class, 'members']);
             Route::post('documents', [ProjectController::class, 'upload']);
             Route::get('documents/{document}', [ProjectController::class, 'download']);
+            Route::get('wbs', [WbsController::class, 'show'])->name('wbs.show');
+            Route::put('wbs/draft', [WbsController::class, 'save']);
+            Route::post('wbs/template', [WbsController::class, 'copyTemplate']);
+            Route::put('wbs/readers', [WbsController::class, 'readers']);
+            Route::put('wbs/cutoff', [WbsController::class, 'cutoff']);
+            Route::post('wbs/{revision}/transition', [WbsController::class, 'transition']);
         });
     });
 });

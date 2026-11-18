@@ -64,6 +64,7 @@ export default function ProjectPage({ organization, project, can, members, assig
 
     return <Shell title={project.name} organization={organization} actions={<>
         <Link className="button secondary" href={base}>Daftar proyek</Link>
+        {can['wbs.view'] && <Link className="button" href={url + '/wbs'}>WBS dan baseline</Link>}
     </>}>
         <Section title="Ringkasan proyek" actions={<span className={'pill ' + project.status}>{projectStatus[project.status]}</span>}>
             <dl className="facts">
