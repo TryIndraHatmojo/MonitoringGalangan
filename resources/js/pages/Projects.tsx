@@ -1,47 +1,73 @@
-import { Link, useForm } from '@inertiajs/react';
+import { Input } from '@/components/ui/input';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Button } from '@/components/ui/button';
+import { useInertiaForm } from '@/lib/inertia-form';
 import { useState } from 'react';
-import { Project, ProjectFields, emptyProject } from '../project-fields';
-import { Errors, Field, Organization, Page, Pagination, Section, Shell, formatDate, organizationUrl, projectStatus } from '../ui';
+import { Project, ProjectFields, emptyProject, projectSchema } from '../project-fields';
+import { ArrowRight, Pencil, Plus, Search, Ship, X } from 'lucide-react';
+import { z } from 'zod';
+import { Card } from '@/components/ui/card';
+import type { ProjectContext } from '@/components/project-combobox';
+import { Errors, Field, LinkButton, Organization, Page, Pagination, Section, Shell, StatusBadge, formatDate, organizationUrl, projectStatus } from '../ui';
 
-type Props = { organization: Organization; projects: Page<Project>; isAdmin: boolean; filters: { q: string; status: string } };
+type Props = { organization: Organization; projects: Page<Project>; context: ProjectContext; canEditProfile: boolean; filters: { q: string; status: string } };
 
-export default function Projects({ organization, projects, isAdmin, filters }: Props) {
+export default function Projects({ organization, projects, context, canEditProfile, filters }: Props) {
     const [creating, setCreating] = useState(false);
     const url = organizationUrl(organization) + '/projects';
-    const form = useForm(emptyProject);
-    const search = useForm(filters);
+    const form = useInertiaForm(emptyProject, projectSchema(true));
+    const search = useInertiaForm(filters, z.object({ q: z.string().max(100, 'Pencarian maksimal 100 karakter.'), status: z.string() }));
 
-    return <Shell title="Proyek galangan" organization={organization} actions={isAdmin && <>
-        <Link className="button secondary" href={organizationUrl(organization) + '/access'}>Hak akses</Link>
-        <button className="button" onClick={() => setCreating(!creating)}>{creating ? 'Tutup formulir' : 'Tambah proyek'}</button>
-    </>}>
+    return <Shell title="Proyek Kapal" organization={organization} context={context} actions={context.canManageOrganization &&
+        <Button aria-expanded={creating} onClick={() => setCreating(!creating)}>{creating ? <X /> : <Plus />}{creating ? 'Tutup formulir' : 'Proyek baru'}</Button>
+    }>
         {creating && <Section title="Proyek baru">
             <Errors errors={form.errors} />
             <form className="stack" onSubmit={(event) => { event.preventDefault(); form.post(url); }}>
                 <ProjectFields data={form.data} set={form.setData} contract />
-                <div><button className="button" disabled={form.processing}>Simpan proyek</button></div>
+                <div><Button disabled={form.processing}>Simpan proyek</Button></div>
             </form>
         </Section>}
-        <Section title="Daftar proyek">
+        <Section>
             <Errors errors={search.errors} />
-            <form className="grid-form mb-4 items-end" onSubmit={(event) => { event.preventDefault(); search.get(url, { preserveState: true }); }}>
-                <Field label="Cari proyek"><input type="search" placeholder="Nomor, proyek, atau nama kapal" value={search.data.q} onChange={(event) => search.setData('q', event.target.value)} /></Field>
-                <Field label="Status"><select value={search.data.status} onChange={(event) => search.setData('status', event.target.value)}>
+            <form className="project-filters" onSubmit={(event) => { event.preventDefault(); search.get(url, { preserveState: true }); }}>
+                <Field label="Cari proyek"><Input type="search" placeholder="Nomor, proyek, atau nama kapal" value={search.data.q} onChange={(event) => search.setData('q', event.target.value)} /></Field>
+                <Field label="Status"><NativeSelect value={search.data.status} onChange={(event) => search.setData('status', event.target.value)}>
                     <option value="">Semua status</option>
                     {Object.entries(projectStatus).map(([code, label]) => <option key={code} value={code}>{label}</option>)}
-                </select></Field>
-                <div><button className="button secondary" disabled={search.processing}>Tampilkan</button></div>
+                </NativeSelect></Field>
+                <div><Button variant="outline" disabled={search.processing}><Search />Tampilkan</Button></div>
             </form>
-            {projects.data.length ? <div className="table-shell"><table>
-                <thead><tr><th>Proyek</th><th>Kapal</th><th>Mulai</th><th>Target selesai</th><th>Status</th></tr></thead>
-                <tbody>{projects.data.map((project) => <tr key={project.id}>
-                    <td><Link href={url + '/' + project.id}>{project.name}</Link><div className="help">{project.number}</div></td>
-                    <td>{project.ship_name}<div className="help">{project.ship_type}</div></td>
-                    <td>{formatDate(project.start_date)}</td><td>{formatDate(project.target_date)}</td>
-                    <td><span className={'pill ' + project.status}>{projectStatus[project.status]}</span></td>
-                </tr>)}</tbody>
-            </table></div> : <p className="empty">Tidak ada proyek yang cocok atau dapat diakses.</p>}
-            <Pagination page={projects} />
         </Section>
+        {projects.data.length === 0 && <p className="empty">{context.active
+            ? 'Tidak ada proyek yang cocok dengan filter.' : 'Belum ada proyek yang dapat Anda akses.'}</p>}
+        <div className="project-cards">
+            {projects.data.map((project) => {
+                const href = url + '/' + project.id;
+
+                return <Card key={project.id} className="project-card">
+                    <div className="project-card-top">
+                        <span className="project-card-icon"><Ship aria-hidden="true" /></span>
+                        <StatusBadge status={project.status} />
+                    </div>
+                    <div>
+                        <h2>{project.ship_name}</h2>
+                        <p className="help">{project.ship_type} · {project.number}</p>
+                        {project.name !== project.ship_name && <p className="mt-1 text-sm">{project.name}</p>}
+                    </div>
+                    <dl className="project-card-facts">
+                        <div><dt>Galangan</dt><dd>{project.shipyard}</dd></div>
+                        <div><dt>Mulai</dt><dd>{formatDate(project.start_date)}</dd></div>
+                        <div><dt>Target selesai</dt><dd>{formatDate(project.target_date)}</dd></div>
+                    </dl>
+                    <div className="actions">
+                        <LinkButton href={href} aria-label={'Buka proyek ' + project.ship_name}><ArrowRight />Buka proyek</LinkButton>
+                        {canEditProfile && <LinkButton variant="outline" href={href + '#edit-profil'}
+                            aria-label={'Edit profil ' + project.ship_name}><Pencil />Edit profil</LinkButton>}
+                    </div>
+                </Card>;
+            })}
+        </div>
+        <Pagination page={projects} />
     </Shell>;
 }

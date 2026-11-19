@@ -8,6 +8,6 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // Production bootstrap uses the interactive monitoring:admin command.
+        $this->call(app()->environment('local', 'testing') ? DevelopmentSeeder::class : RoleSeeder::class);
     }
 }

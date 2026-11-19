@@ -19,7 +19,7 @@ class HandleInertiaRequests extends Middleware
 
                 return [
                     'user' => $user?->only(['id', 'name', 'email', 'platform_admin']),
-                    'organizations' => $user ? app(Access::class)->organizations($user) : [],
+                    'organization' => $user ? app(Access::class)->assignedOrganization($user) : null,
                 ];
             },
             'notice' => fn () => $request->session()->get('notice'),

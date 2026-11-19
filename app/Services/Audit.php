@@ -13,7 +13,7 @@ final class Audit
     ): void {
         DB::table('audit_events')->insert([
             'actor_id' => $actor?->id,
-            'organization_id' => $organization,
+            'galangan_id' => $organization,
             'project_id' => $project,
             'action' => $action,
             'target_id' => $target,

@@ -1,9 +1,15 @@
-import { Head, Link, router, usePage } from '@inertiajs/react';
-import type { ReactNode } from 'react';
+import { Head, Link, usePage } from '@inertiajs/react';
+import { Anchor, ArrowLeft, ArrowRight, Building2, CheckCircle2, CircleAlert, LayoutDashboard, ListTree, LogOut, Server, ShieldCheck, Ship, UserRound } from 'lucide-react';
+import type { ComponentProps, ReactNode } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { ProjectCombobox, type ProjectContext } from '@/components/project-combobox';
 
 export type Organization = { id: string; name: string; slug: string };
 export type User = { id: string; name: string; email: string; platform_admin: boolean };
-export type Shared = { auth: { user: User | null; organizations: Organization[] }; notice: string | null };
+export type Shared = { auth: { user: User | null; organization: Organization | null }; notice: string | null };
 export type Page<T> = { data: T[]; prev_page_url: string | null; next_page_url: string | null; current_page: number; last_page: number };
 export type AuditEvent = { id: number; action: string; actor?: string | null; reason?: string | null; target_id?: string | null; changes?: string; created_at: string };
 
@@ -15,57 +21,76 @@ export function organizationUrl(organization: Organization) {
     return '/org/' + organization.slug;
 }
 
-export function Shell({ title, organization, actions, children }: { title: string; organization?: Organization; actions?: ReactNode; children: ReactNode }) {
+export function Shell({ title, organization, context, actions, beforeProjectChange, children }: {
+    title: string;
+    organization?: Organization;
+    context?: ProjectContext;
+    actions?: ReactNode;
+    beforeProjectChange?: () => boolean;
+    children: ReactNode;
+}) {
     const { auth, notice } = useShared();
-    const orgPath = organization && organizationUrl(organization);
+    const { url } = usePage();
+    const currentOrg = organization ?? auth.organization;
+    const orgPath = currentOrg && organizationUrl(currentOrg);
+    const projectPath = orgPath && context?.active && orgPath + '/projects/' + context.active.id;
+    const path = url.split('?')[0];
+    const breadcrumb = context?.page === 'profile' ? 'Ringkasan proyek' : title;
 
     return <>
         <Head title={title} />
         <div className="app-shell">
             <aside className="sidebar">
                 <Link className="brand" href="/">
-                    <span className="brand-icon" aria-hidden="true">MG</span>
+                    <span className="brand-icon"><Anchor aria-hidden="true" /></span>
                     <span>Monitoring<br /><strong>Galangan</strong></span>
                 </Link>
                 <div className="sidebar-content">
-                    {auth.organizations.length > 0 && <label className="organization-switch">
-                        <span>Organisasi</span>
-                        <select aria-label="Organisasi aktif" value={organization?.slug ?? ''} onChange={(event) => router.visit('/org/' + event.target.value + '/projects')}>
-                            <option value="" disabled>Pilih organisasi</option>
-                            {auth.organizations.map((org) => <option key={org.id} value={org.slug}>{org.name}</option>)}
-                        </select>
-                    </label>}
                     <nav aria-label="Navigasi utama">
-                        <Link href="/">Organisasi saya</Link>
-                        {orgPath && <Link href={orgPath + '/projects'}>Proyek</Link>}
-                        <Link href="/devices">Perangkat API</Link>
+                        {auth.user?.platform_admin && <Link href="/" aria-current={path === '/' ? 'page' : undefined}><Building2 />Administrasi galangan</Link>}
+                        {projectPath && <Link href={projectPath} aria-current={path === projectPath ? 'page' : undefined}><LayoutDashboard />Ringkasan proyek</Link>}
+                        {orgPath && <Link href={orgPath + '/projects'} aria-current={path === orgPath + '/projects' ? 'page' : undefined}><Ship />Proyek Kapal</Link>}
+                        {projectPath && context?.active?.canOpenBuilder && <Link href={projectPath + '/wbs'} aria-current={path === projectPath + '/wbs' ? 'page' : undefined}><ListTree />Form Builder</Link>}
+                        {orgPath && (context?.canManageOrganization || path === orgPath + '/access') && <Link href={orgPath + '/access'} aria-current={path === orgPath + '/access' ? 'page' : undefined}><ShieldCheck />Hak akses</Link>}
+                        <Link href="/devices" aria-current={path === '/devices' ? 'page' : undefined}><Server />Perangkat API</Link>
                     </nav>
                 </div>
                 <div className="sidebar-user">
-                    <span>{auth.user?.name}</span>
-                    <Link href="/logout" method="post" as="button">Keluar</Link>
+                    <div className="sidebar-account"><span className="account-icon"><UserRound size={16} /></span><span>{auth.user?.name}</span></div>
+                    <LinkButton href="/logout" method="post" as="button" variant="ghost"><LogOut />Keluar</LinkButton>
                 </div>
             </aside>
-            <main className="workspace">
-                <header className="workspace-header">
-                    <div>
-                        {organization && <p className="context">{organization.name}</p>}
+            <main className="workspace-main">
+                <div className="workspace-bar">
+                    <p className="workspace-crumb"><span>{currentOrg?.name ?? 'Ruang kerja'}</span><strong>{breadcrumb}</strong></p>
+                    {orgPath && context && <ProjectCombobox key={orgPath} base={orgPath} context={context} url={url} beforeChange={beforeProjectChange} />}
+                </div>
+                <div className="workspace">
+                    <header className="workspace-header">
                         <h1>{title}</h1>
-                    </div>
-                    {actions && <div className="actions">{actions}</div>}
-                </header>
-                {notice && <p role="status" className="notice">{notice}</p>}
-                {children}
+                        {actions && <div className="actions">{actions}</div>}
+                    </header>
+                    {notice && <Notice>{notice}</Notice>}
+                    {children}
+                </div>
             </main>
         </div>
     </>;
 }
 
 export function Section({ title, actions, children }: { title?: string; actions?: ReactNode; children: ReactNode }) {
-    return <section className="panel">
+    return <Card className="panel">
         {(title || actions) && <header className="panel-header">{title && <h2>{title}</h2>}{actions}</header>}
         {children}
-    </section>;
+    </Card>;
+}
+
+export function LinkButton({ variant, ...props }: ComponentProps<typeof Link> & { variant?: ComponentProps<typeof Button>['variant'] }) {
+    return <Button asChild variant={variant}><Link {...props} /></Button>;
+}
+
+export function Notice({ children }: { children: ReactNode }) {
+    return <Alert role="status" className="notice"><CheckCircle2 aria-hidden="true" /><AlertDescription>{children}</AlertDescription></Alert>;
 }
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -75,20 +100,30 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 export function Errors({ errors }: { errors: Record<string, unknown> }) {
     const messages = Object.values(errors).flat().filter((message): message is string => typeof message === 'string');
     if (!messages.length) return null;
-    return <ul className="errors" role="alert">{[...new Set(messages)].map((message) => <li key={message}>{message}</li>)}</ul>;
+    return <Alert variant="destructive" className="errors">
+        <CircleAlert aria-hidden="true" />
+        <AlertDescription><ul className="list-inside list-disc">{[...new Set(messages)].map((message) => <li key={message}>{message}</li>)}</ul></AlertDescription>
+    </Alert>;
 }
 
 export function Pagination<T>({ page }: { page: Page<T> }) {
     if (page.last_page < 2) return null;
     return <nav aria-label="Paginasi" className="pagination">
-        {page.prev_page_url && <Link className="button secondary" href={page.prev_page_url}>Sebelumnya</Link>}
+        {page.prev_page_url && <LinkButton variant="outline" href={page.prev_page_url}><ArrowLeft />Sebelumnya</LinkButton>}
         <span>Halaman {page.current_page} dari {page.last_page}</span>
-        {page.next_page_url && <Link className="button secondary" href={page.next_page_url}>Berikutnya</Link>}
+        {page.next_page_url && <LinkButton variant="outline" href={page.next_page_url}>Berikutnya<ArrowRight /></LinkButton>}
     </nav>;
 }
 
 export const projectStatus: Record<string, string> = { active: 'Aktif', closed: 'Ditutup', archived: 'Diarsipkan' };
 export const revisionStatus: Record<string, string> = { draft: 'Draf', submitted: 'Diajukan', published: 'Terbit' };
+
+export function StatusBadge({ status, children }: { status: string; children?: ReactNode }) {
+    return <Badge variant="secondary" data-status={status} className="status-badge">
+        <span className="status-dot" />
+        {children ?? projectStatus[status] ?? revisionStatus[status] ?? status}
+    </Badge>;
+}
 
 export function formatNumber(value: string | number | null | undefined, digits = 3) {
     if (value === null || value === undefined || value === '') return '—';
@@ -117,7 +152,7 @@ export function AuditList({ entries, showChanges = false }: { entries: AuditEven
         'project.document_uploaded': 'Dokumen diunggah', 'baseline.draft_saved': 'Draf baseline disimpan',
         'baseline.template_copied': 'Template baseline disalin', 'baseline.submit': 'Baseline diajukan',
         'baseline.return': 'Baseline dikembalikan', 'baseline.publish': 'Baseline diterbitkan',
-        'wbs.readers_changed': 'Pembaca WBS diperbarui', 'baseline.cutoff_changed': 'Cutoff diperbarui',
+        'wbs.readers_changed': 'Pembaca Form Builder diperbarui', 'baseline.cutoff_changed': 'Cutoff diperbarui',
         'account.device_token_issued': 'Token perangkat diterbitkan', 'account.device_token_revoked': 'Token perangkat dicabut',
     };
     return <ul className="audit-list">

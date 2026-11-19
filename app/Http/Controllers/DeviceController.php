@@ -14,10 +14,10 @@ class DeviceController extends Controller
     public function index(Request $request): Response
     {
         return Inertia::render('Devices', [
-            'devices' => $request->user()->tokens()->join('organizations', 'organizations.id', '=', 'personal_access_tokens.organization_id')
+            'devices' => $request->user()->tokens()->join('galangantbls', 'galangantbls.id', '=', 'personal_access_tokens.galangan_id')
                 ->orderByDesc('personal_access_tokens.created_at')->get([
                     'personal_access_tokens.id', 'personal_access_tokens.name', 'device_id', 'last_used_at', 'expires_at',
-                    'organizations.name as organization',
+                    'galangantbls.name as organization',
                 ]),
         ]);
     }
@@ -27,7 +27,7 @@ class DeviceController extends Controller
         DB::transaction(function () use ($request, $device): void {
             $token = $request->user()->tokens()->whereKey($device)->firstOrFail();
             $token->delete();
-            Audit::record($request->user(), 'account.device_token_revoked', $token->organization_id, target: (string) $token->id);
+            Audit::record($request->user(), 'account.device_token_revoked', $token->galangan_id, target: (string) $token->id);
         });
 
         return back()->with('notice', 'Token perangkat dicabut.');

@@ -1,6 +1,14 @@
-import { Link, useForm } from '@inertiajs/react';
+import { Input } from '@/components/ui/input';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Button } from '@/components/ui/button';
+import { DataTable } from '@/components/data-table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useInertiaForm } from '@/lib/inertia-form';
 import { useState } from 'react';
-import { AuditEvent, AuditList, Errors, Field, Organization, Section, Shell, formatDate, organizationUrl } from '../ui';
+import { ArrowLeft, Send } from 'lucide-react';
+import { z } from 'zod';
+import { emailAddress } from '@/lib/validation';
+import { AuditEvent, AuditList, Errors, Field, LinkButton, Organization, Section, Shell, formatDate, organizationUrl } from '../ui';
 
 type Member = { id: string; name: string; email: string; role: string; active: boolean; account_active: boolean };
 type Props = {
@@ -10,19 +18,24 @@ type Props = {
 };
 
 function MemberRow({ member, roles, url }: { member: Member; roles: Props['roles']; url: string }) {
-    const form = useForm({ role: member.role, active: Boolean(member.active) });
-    return <tr><td>{member.name}<div className="help">{member.email}</div></td>
-        <td><select aria-label={'Tipe pengguna ' + member.name} value={form.data.role} onChange={(event) => form.setData('role', event.target.value)}>
+    const form = useInertiaForm({ role: member.role, active: Boolean(member.active) }, z.object({
+        role: z.string().refine((value) => Object.hasOwn(roles, value), 'Pilih tipe pengguna.'),
+        active: z.boolean(),
+    }));
+    return <TableRow><TableCell>{member.name}<div className="help">{member.email}</div></TableCell>
+        <TableCell><NativeSelect aria-label={'Tipe pengguna ' + member.name} value={form.data.role} onChange={(event) => form.setData('role', event.target.value)}>
             {Object.entries(roles).map(([code, label]) => <option value={code} key={code}>{label}</option>)}
-        </select></td>
-        <td><label className="check"><input type="checkbox" checked={form.data.active} onChange={(event) => form.setData('active', event.target.checked)} /> Aktif di organisasi</label>{!member.account_active && <div className="help">Akun nonaktif</div>}</td>
-        <td><Errors errors={form.errors} /><button className="button secondary" disabled={form.processing || !form.isDirty}
-            onClick={() => form.patch(url + '/members/' + member.id, { preserveScroll: true, onSuccess: () => form.setDefaults() })}>Simpan</button></td>
-    </tr>;
+        </NativeSelect></TableCell>
+        <TableCell><label className="check"><input type="checkbox" checked={form.data.active} onChange={(event) => form.setData('active', event.target.checked)} /> Aktif di organisasi</label>{!member.account_active && <div className="help">Akun nonaktif</div>}</TableCell>
+        <TableCell><Errors errors={form.errors} /><Button variant="outline" disabled={form.processing || !form.isDirty}
+            onClick={() => form.patch(url + '/members/' + member.id, { preserveScroll: true, onSuccess: () => form.setDefaults() })}>Simpan</Button></TableCell>
+    </TableRow>;
 }
 
 function PermissionEditor({ role, label, catalog, selected, url }: { role: string; label: string; catalog: Props['catalog']; selected: string[]; url: string }) {
-    const form = useForm({ actions: selected });
+    const form = useInertiaForm({ actions: selected }, z.object({
+        actions: z.array(z.string().refine((action) => Object.hasOwn(catalog, action), 'Izin tidak tersedia.')),
+    }));
     return <form className="stack" onSubmit={(event) => {
         event.preventDefault();
         form.put(url + '/permissions/' + role, { preserveScroll: true, onSuccess: () => form.setDefaults() });
@@ -33,43 +46,49 @@ function PermissionEditor({ role, label, catalog, selected, url }: { role: strin
                 onChange={(event) => form.setData('actions', event.target.checked ? [...form.data.actions, action] : form.data.actions.filter((entry) => entry !== action))} />
             {title}
         </label>)}</div>
-        {role !== 'administrator' && <div><button className="button" disabled={form.processing}>Simpan hak akses</button></div>}
+        {role !== 'administrator' && <div><Button disabled={form.processing}>Simpan hak akses</Button></div>}
     </form>;
 }
 
 export default function AccessPage({ organization, members, invitations, roles, catalog, permissions, audit }: Props) {
     const url = organizationUrl(organization) + '/access';
-    const invite = useForm({ email: '', role: 'planner' });
+    const invite = useInertiaForm({ email: '', role: 'planner' }, z.object({
+        email: emailAddress, role: z.string().refine((value) => Object.hasOwn(roles, value), 'Pilih tipe pengguna.'),
+    }));
     const [role, setRole] = useState('planner');
 
-    return <Shell title="Hak akses organisasi" organization={organization} actions={<Link className="button secondary" href={organizationUrl(organization) + '/projects'}>Daftar proyek</Link>}>
+    return <Shell title="Hak akses organisasi" organization={organization} actions={<LinkButton variant="outline" href={organizationUrl(organization) + '/projects'}><ArrowLeft />Daftar proyek</LinkButton>}>
         <Section title="Izin per tipe pengguna">
             <div className="stack">
-                <Field label="Tipe pengguna"><select value={role} onChange={(event) => setRole(event.target.value)}>
+                <Field label="Tipe pengguna"><NativeSelect value={role} onChange={(event) => setRole(event.target.value)}>
                     {Object.entries(roles).map(([code, label]) => <option key={code} value={code}>{label}</option>)}
-                </select></Field>
+                </NativeSelect></Field>
                 <PermissionEditor key={role} role={role} label={roles[role]} selected={permissions[role]} catalog={catalog} url={url} />
             </div>
         </Section>
         <Section title="Anggota organisasi">
-            {members.length ? <div className="table-shell"><table><thead><tr><th>Anggota</th><th>Tipe pengguna</th><th>Keanggotaan</th><th>Aksi</th></tr></thead>
-                <tbody>{members.map((member) => <MemberRow key={member.id} member={member} roles={roles} url={url} />)}</tbody></table></div>
+            {members.length ? <Table aria-label="Anggota organisasi"><TableHeader><TableRow>
+                <TableHead scope="col">Anggota</TableHead><TableHead scope="col">Tipe pengguna</TableHead><TableHead scope="col">Keanggotaan</TableHead><TableHead scope="col">Aksi</TableHead>
+            </TableRow></TableHeader><TableBody>{members.map((member) => <MemberRow key={member.id} member={member} roles={roles} url={url} />)}</TableBody></Table>
                 : <p className="empty">Belum ada anggota organisasi.</p>}
         </Section>
         <Section title="Undang anggota">
             <Errors errors={invite.errors} />
             <form className="stack" onSubmit={(event) => { event.preventDefault(); invite.post(url + '/invitations', { preserveScroll: true, onSuccess: () => invite.reset('email') }); }}>
                 <div className="grid-form">
-                    <Field label="Alamat email"><input required type="email" value={invite.data.email} onChange={(event) => invite.setData('email', event.target.value)} /></Field>
-                    <Field label="Tipe pengguna"><select value={invite.data.role} onChange={(event) => invite.setData('role', event.target.value)}>
+                    <Field label="Alamat email"><Input required type="email" value={invite.data.email} onChange={(event) => invite.setData('email', event.target.value)} /></Field>
+                    <Field label="Tipe pengguna"><NativeSelect value={invite.data.role} onChange={(event) => invite.setData('role', event.target.value)}>
                         {Object.entries(roles).map(([code, label]) => <option key={code} value={code}>{label}</option>)}
-                    </select></Field>
+                    </NativeSelect></Field>
                 </div>
-                <div><button className="button" disabled={invite.processing}>Kirim undangan</button></div>
+                <div><Button disabled={invite.processing}><Send />Kirim undangan</Button></div>
             </form>
-            {invitations.length > 0 && <div className="table-shell"><table><thead><tr><th>Undangan menunggu</th><th>Tipe pengguna</th><th>Kedaluwarsa</th></tr></thead>
-                <tbody>{invitations.map((invitation) => <tr key={invitation.email}><td>{invitation.email}</td><td>{roles[invitation.role]}</td><td>{formatDate(invitation.expires_at)}</td></tr>)}</tbody>
-            </table></div>}
+            {invitations.length > 0 && <div className="mt-4"><DataTable data={invitations} rowKey={(invitation) => invitation.email}
+                label="Undangan menunggu" columns={[
+                    { accessorKey: 'email', header: 'Undangan menunggu' },
+                    { id: 'role', header: 'Tipe pengguna', cell: ({ row }) => roles[row.original.role] },
+                    { id: 'expires', header: 'Kedaluwarsa', cell: ({ row }) => formatDate(row.original.expires_at) },
+                ]} /></div>}
         </Section>
         <Section title="Audit organisasi"><AuditList entries={audit} showChanges /></Section>
     </Shell>;

@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 final class Access
 {
     public const ROLES = [
+        'platform_admin' => 'Administrator Pusat',
         'administrator' => 'Administrator organisasi',
         'manager' => 'Project Manager',
         'planner' => 'Planner / Engineering',
@@ -28,9 +29,9 @@ final class Access
         'projects.contract' => 'Lihat nilai kontrak',
         'documents.view' => 'Unduh dokumen',
         'documents.manage' => 'Unggah dokumen',
-        'wbs.view' => 'Lihat WBS dan baseline',
-        'wbs.manage' => 'Kelola draf WBS dan baseline',
-        'wbs.access' => 'Kelola pembaca WBS',
+        'wbs.view' => 'Lihat Form Builder dan baseline',
+        'wbs.manage' => 'Kelola draf Form Builder dan baseline',
+        'wbs.access' => 'Kelola pembaca Form Builder',
         'baselines.submit' => 'Ajukan baseline',
         'baselines.approve' => 'Setujui atau kembalikan baseline',
         'official.reopen' => 'Buka kembali data resmi',
@@ -48,30 +49,45 @@ final class Access
         'viewer' => ['projects.view'],
     ];
 
-    public function organizations(User $user): Collection
+    public function roles(): array
     {
-        return DB::table('organizations')->when(! $user->platform_admin, fn ($query) => $query
-            ->whereIn('id', DB::table('organization_members')->select('organization_id')
-                ->where('user_id', $user->id)->where('active', true)))
-            ->orderBy('name')->orderBy('id')->get(['id', 'slug', 'name']);
+        $roles = DB::table('roletbls')->where('kode', '!=', 'platform_admin')->pluck('nama', 'kode')->all();
+
+        return array_replace(array_intersect_key(self::ROLES, $roles), $roles);
+    }
+
+    public function organizations(): Collection
+    {
+        return DB::table('galangantbls')->orderBy('name')->orderBy('id')->get(['id', 'slug', 'name']);
+    }
+
+    public function assignedOrganization(User $user): ?object
+    {
+        if (! $user->active || ! $user->keanggotaan_aktif || $user->galangan_id === null) {
+            return null;
+        }
+
+        return DB::table('galangantbls')->where('id', $user->galangan_id)->first(['id', 'slug', 'name']);
     }
 
     public function organization(User $user, string $key, string $field = 'slug'): object
     {
-        $organization = DB::table('organizations')->where($field, $key)->first();
-        abort_unless($organization && ($user->platform_admin || $this->role($user, $organization->id)), 404);
+        $organization = DB::table('galangantbls')->where($field, $key)->first();
+        abort_unless($organization && $this->canAccessOrganization($user, $organization->id), 404);
 
         return $organization;
     }
 
+    public function canAccessOrganization(User $user, string $organization): bool
+    {
+        return $user->active && ($user->platform_admin || $this->role($user, $organization) !== null);
+    }
+
     public function role(User $user, string $organization): ?string
     {
-        if (! $user->active) {
-            return null;
-        }
-
-        return DB::table('organization_members')->where('organization_id', $organization)
-            ->where('user_id', $user->id)->where('active', true)->value('role');
+        return $user->active && $user->keanggotaan_aktif && $user->galangan_id === $organization
+            ? $user->kode_role
+            : null;
     }
 
     public function admin(User $user, string $organization): bool
@@ -85,8 +101,8 @@ final class Access
             return array_keys(self::ACTIONS);
         }
 
-        $override = DB::table('organization_permissions')->where(compact('role'))
-            ->where('organization_id', $organization)->value('actions');
+        $override = DB::table('galangan_premissiontbls')->where('kode_role', $role)
+            ->where('galangan_id', $organization)->value('actions');
 
         return $override === null ? (self::DEFAULTS[$role] ?? []) : json_decode($override, true, flags: JSON_THROW_ON_ERROR);
     }
@@ -104,7 +120,7 @@ final class Access
 
     public function projects(User $user, string $organization): Builder
     {
-        $projects = DB::table('projects')->where('organization_id', $organization);
+        $projects = DB::table('projects')->where('galangan_id', $organization);
         if ($this->admin($user, $organization)) {
             return $projects;
         }
@@ -127,11 +143,11 @@ final class Access
 
     public function allows(User $user, object $project, string $action): bool
     {
-        if ($this->admin($user, $project->organization_id)) {
+        if ($this->admin($user, $project->galangan_id)) {
             return true;
         }
 
-        if (! in_array($action, $this->permissions($user, $project->organization_id), true)) {
+        if (! in_array($action, $this->permissions($user, $project->galangan_id), true)) {
             return false;
         }
 
@@ -157,14 +173,14 @@ final class Access
 
     public function members(string $organization): Builder
     {
-        return DB::table('organization_members as members')
-            ->join('users', 'users.id', '=', 'members.user_id')
-            ->where('members.organization_id', $organization);
+        return DB::table('users')->where('users.galangan_id', $organization);
     }
 
     public function serializeProject(User $user, object $project): array
     {
         $fields = (array) $project;
+        $fields['organization_id'] = $fields['galangan_id'];
+        unset($fields['galangan_id']);
         if (! $this->allows($user, $project, 'projects.contract')) {
             unset($fields['contract_amount'], $fields['currency']);
         }

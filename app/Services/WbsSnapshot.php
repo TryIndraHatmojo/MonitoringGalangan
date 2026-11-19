@@ -37,7 +37,7 @@ final class WbsSnapshot
             'nodes.*.stages.*' => 'array:name,weight',
             'nodes.*.stages.*.name' => 'required|string|max:180',
             'nodes.*.stages.*.weight' => 'required|numeric|decimal:0,6|min:0|max:100',
-            'nodes.*.reviewer_role' => ['nullable', Rule::in(array_keys(Access::ROLES))],
+            'nodes.*.reviewer_role' => ['nullable', Rule::in(array_keys(app(Access::class)->roles()))],
             'targets' => 'present|array|list|max:40000',
             'targets.*' => 'array:item_id,period,value',
             'targets.*.item_id' => 'required|uuid',

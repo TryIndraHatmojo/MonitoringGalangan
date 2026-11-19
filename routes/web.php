@@ -32,6 +32,8 @@ Route::middleware(['auth', ActiveAccount::class])->group(function (): void {
         Route::patch('access/members/{member}', [OrganizationController::class, 'membership']);
         Route::get('projects', [ProjectController::class, 'index'])->name('projects.index');
         Route::post('projects', [ProjectController::class, 'create']);
+        Route::get('project-options', [ProjectController::class, 'options']);
+        Route::post('active-project', [ProjectController::class, 'select']);
 
         Route::prefix('projects/{project}')->group(function (): void {
             Route::get('/', [ProjectController::class, 'show'])->name('projects.show');

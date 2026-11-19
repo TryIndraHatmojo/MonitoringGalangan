@@ -70,7 +70,7 @@ final class Baselines
                 ]);
             }
 
-            Audit::record($user, $copyTemplate ? 'baseline.template_copied' : 'baseline.draft_saved', $project->organization_id, $project->id, $id, [
+            Audit::record($user, $copyTemplate ? 'baseline.template_copied' : 'baseline.draft_saved', $project->galangan_id, $project->id, $id, [
                 'effective_month' => $data['effective_month'],
                 'changes' => $this->diff($previous, $snapshot),
             ]);
@@ -109,7 +109,7 @@ final class Baselines
             }
 
             $this->revisions($project->id)->where('id', $id)->update($changes + ['version' => $version + 1, 'updated_at' => now()]);
-            Audit::record($user, 'baseline.'.$operation, $project->organization_id, $project->id, $id, [
+            Audit::record($user, 'baseline.'.$operation, $project->galangan_id, $project->id, $id, [
                 'before' => $revision->status, 'after' => $changes['status'], 'effective_month' => $revision->effective_month, 'revision' => $revision->revision,
             ], $reason ?? $revision->reason);
         }, 3);
@@ -135,7 +135,7 @@ final class Baselines
             $before = DB::table('project_periods')->where($key)->first();
             abort_if($before?->official_baseline_id, 409, 'Periode resmi harus diperbarui melalui koreksi.');
             DB::table('project_periods')->updateOrInsert($key, ['cutoff_date' => $cutoff]);
-            Audit::record($user, 'baseline.cutoff_changed', $project->organization_id, $project->id, $month, [
+            Audit::record($user, 'baseline.cutoff_changed', $project->galangan_id, $project->id, $month, [
                 'before' => $before?->cutoff_date, 'after' => $cutoff,
             ]);
         });
@@ -143,9 +143,9 @@ final class Baselines
 
     public function roster(object $project): Builder
     {
-        return app(Access::class)->members($project->organization_id)
+        return app(Access::class)->members($project->galangan_id)
             ->join('project_members', 'project_members.user_id', '=', 'users.id')->where('project_members.project_id', $project->id)
-            ->where('users.active', true)->where('members.active', true);
+            ->where('users.active', true)->where('users.keanggotaan_aktif', true);
     }
 
     private function lockActiveProject(string $id): object
@@ -210,7 +210,7 @@ final class Baselines
             DB::table('wbs_readers')->insert(array_map(fn (string $id): array => ['project_id' => $project->id, 'user_id' => $id], $readers));
         }
         DB::table('projects')->where('id', $project->id)->update(['wbs_restricted' => $restricted, 'updated_at' => now()]);
-        Audit::record($user, 'wbs.readers_changed', $project->organization_id, $project->id, $project->id,
+        Audit::record($user, 'wbs.readers_changed', $project->galangan_id, $project->id, $project->id,
             ['before' => ['restricted' => (bool) $project->wbs_restricted, 'readers' => $before], 'after' => compact('restricted', 'readers')]);
     }
 

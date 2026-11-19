@@ -1,3 +1,4 @@
+import '@fontsource-variable/inter';
 import '../css/app.css';
 import { createInertiaApp } from '@inertiajs/react';
 import type { ComponentType } from 'react';

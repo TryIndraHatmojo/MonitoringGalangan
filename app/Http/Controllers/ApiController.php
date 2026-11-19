@@ -13,6 +13,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\PersonalAccessToken;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -25,18 +26,26 @@ class ApiController extends Controller
         $data = $request->validate([
             'email' => 'required|email|max:255',
             'password' => 'required|string|max:255',
-            'organization' => 'required|string|max:100',
+            'organization' => 'nullable|string|max:100',
             'device_id' => 'required|string|max:100',
             'device_name' => 'required|string|max:150',
         ]);
 
         $issued = DB::transaction(function () use ($data): array {
-            $org = DB::table('organizations')->where('slug', $data['organization'])->lockForUpdate()->first();
-            $user = User::query()->where('email', Str::lower($data['email']))->lockForUpdate()->first();
-            abort_unless($org && $user?->active && Hash::check($data['password'], $user->password)
-                && ($user->platform_admin || $this->access->role($user, $org->id)), 401, 'Kredensial atau organisasi tidak valid.');
+            $email = Str::lower($data['email']);
+            $slug = $data['organization'] ?? null;
+            $org = DB::table('galangantbls')
+                ->when($slug !== null, fn ($query) => $query->where('slug', $slug),
+                    fn ($query) => $query->where('id', User::query()->select('galangan_id')->where('email', $email)))
+                ->lockForUpdate()->first();
+            $user = User::query()->where('email', $email)->lockForUpdate()->first();
+            abort_unless($user?->active && Hash::check($data['password'], $user->password), 401, 'Kredensial atau organisasi tidak valid.');
+            if ($user->platform_admin && $slug === null) {
+                throw ValidationException::withMessages(['organization' => 'Pilih galangan untuk token Administrator Pusat.']);
+            }
+            abort_unless($org && $this->access->canAccessOrganization($user, $org->id), 401, 'Kredensial atau organisasi tidak valid.');
 
-            $user->tokens()->where('organization_id', $org->id)->where('device_id', $data['device_id'])->delete();
+            $user->tokens()->where('galangan_id', $org->id)->where('device_id', $data['device_id'])->delete();
             $secret = $user->generateTokenString();
             $token = $user->tokens()->make([
                 'name' => $data['device_name'],
@@ -44,7 +53,7 @@ class ApiController extends Controller
                 'abilities' => ['projects:read', 'wbs:read'],
                 'expires_at' => now()->addDays(30),
             ]);
-            $token->forceFill(['organization_id' => $org->id, 'device_id' => $data['device_id']])->save();
+            $token->forceFill(['galangan_id' => $org->id, 'device_id' => $data['device_id']])->save();
             Audit::record($user, 'account.device_token_issued', $org->id, target: (string) $token->id, changes: ['device_name' => $token->name]);
 
             return ['token_type' => 'Bearer', 'token' => $token->id.'|'.$secret, 'expires_at' => $token->expires_at->toIso8601String()];
@@ -58,7 +67,7 @@ class ApiController extends Controller
         $token = $this->token($request);
         DB::transaction(function () use ($request, $token): void {
             $token->delete();
-            Audit::record($request->user(), 'account.device_token_revoked', $token->organization_id, target: (string) $token->id);
+            Audit::record($request->user(), 'account.device_token_revoked', $token->galangan_id, target: (string) $token->id);
         });
 
         return response()->noContent();
@@ -68,7 +77,7 @@ class ApiController extends Controller
     {
         $token = $this->token($request);
         $user = $request->user();
-        $org = $this->access->organization($user, $token->organization_id, 'id');
+        $org = $this->access->organization($user, $token->galangan_id, 'id');
 
         return response()->json(['data' => [
             'id' => $user->id, 'name' => $user->name, 'email' => $user->email,
@@ -82,7 +91,7 @@ class ApiController extends Controller
         $token = $this->token($request, 'projects:read');
         $page = $this->pagination($request);
         $user = $request->user();
-        $result = $this->access->projects($user, $token->organization_id)->orderBy('number')->orderBy('id')
+        $result = $this->access->projects($user, $token->galangan_id)->orderBy('number')->orderBy('id')
             ->paginate($page['per_page'], page: $page['page']);
 
         return response()->json([
@@ -94,7 +103,7 @@ class ApiController extends Controller
     public function project(Request $request, string $project): JsonResponse
     {
         $token = $this->token($request, 'projects:read');
-        $record = $this->access->project($request->user(), $token->organization_id, $project);
+        $record = $this->access->project($request->user(), $token->galangan_id, $project);
 
         return response()->json(['data' => $this->projectData($request->user(), $record)]);
     }
@@ -102,7 +111,7 @@ class ApiController extends Controller
     public function wbs(Request $request, string $project): JsonResponse
     {
         $token = $this->token($request, 'wbs:read');
-        $record = $this->access->project($request->user(), $token->organization_id, $project);
+        $record = $this->access->project($request->user(), $token->galangan_id, $project);
         $this->access->require($request->user(), $record, 'wbs.view');
         $period = $this->period($request);
         $page = $this->pagination($request);
@@ -126,7 +135,7 @@ class ApiController extends Controller
         $token = $this->token($request, 'wbs:read');
         $identity = DB::table('wbs_item_ids')->where('id', $item)->first();
         abort_unless($identity, 404);
-        $project = $this->access->project($request->user(), $token->organization_id, $identity->project_id);
+        $project = $this->access->project($request->user(), $token->galangan_id, $identity->project_id);
         abort_unless($this->access->allows($request->user(), $project, 'wbs.view'), 404);
         $period = $this->period($request);
         $baseline = $this->baselines->published($project->id, $period);
@@ -142,8 +151,8 @@ class ApiController extends Controller
     {
         $user = $request->user();
         $token = $user?->currentAccessToken();
-        abort_unless($request->bearerToken() && $user?->active && $token instanceof PersonalAccessToken
-            && ($user->platform_admin || $this->access->role($user, $token->organization_id)), 401);
+        abort_unless($request->bearerToken() && $user && $token instanceof PersonalAccessToken
+            && $this->access->canAccessOrganization($user, $token->galangan_id), 401);
         abort_if($ability && ! $token->can($ability), 403);
 
         return $token;

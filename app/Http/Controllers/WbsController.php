@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\Access;
 use App\Services\Baselines;
+use App\Services\ProjectContext;
 use App\Services\WbsSnapshot;
 use App\Services\WbsTemplates;
 use Illuminate\Http\RedirectResponse;
@@ -16,7 +17,7 @@ use Inertia\Response;
 
 class WbsController extends Controller
 {
-    public function __construct(private readonly Access $access, private readonly Baselines $baselines) {}
+    public function __construct(private readonly Access $access, private readonly Baselines $baselines, private readonly ProjectContext $context) {}
 
     public function show(Request $request, string $organization, string $project): Response
     {
@@ -43,6 +44,7 @@ class WbsController extends Controller
 
         return Inertia::render('Wbs', [
             'organization' => $org,
+            'context' => $this->context->props($request, $org->id, 'builder', $record),
             'project' => Arr::only((array) $record, ['id', 'number', 'name', 'start_date', 'target_date', 'wbs_restricted']),
             'period' => $period,
             'periods' => DB::table('project_periods')->where('project_id', $project)->orderBy('month')
@@ -59,7 +61,7 @@ class WbsController extends Controller
                 'baseline' => $this->metadata($previous),
                 'planned_pct' => $this->baselines->planned($previousSnapshot, $period, false)['planned_pct'],
             ] : null,
-            'roles' => Access::ROLES,
+            'roles' => $this->access->roles(),
             'methods' => $manage ? WbsTemplates::methods() : [],
             'members' => ($manage || $access) ? $this->baselines->roster($record)->orderBy('users.name')->get(['users.id', 'users.name', 'project_members.is_pic']) : [],
             'readers' => $access ? DB::table('wbs_readers')->where('project_id', $project)->pluck('user_id') : [],
@@ -82,13 +84,13 @@ class WbsController extends Controller
         $this->access->require($request->user(), $record, 'wbs.access');
         $data = $request->validate($this->revisionRules() + $this->readerRules() + [
             'template' => 'required|in:ferry,tug',
-            'reviewer_role' => ['nullable', Rule::in(array_keys(Access::ROLES))],
+            'reviewer_role' => ['nullable', Rule::in(array_keys($this->access->roles()))],
         ]);
         $data['restricted'] = (bool) $data['restricted'];
         $data['snapshot'] = WbsTemplates::project($data['template'], $record, $data['reviewer_role'] ?? null);
         $this->baselines->save($request->user(), $record, $data, copyTemplate: true);
 
-        return $this->afterReaders($request, $organization, $project, $record->organization_id, 'Template disalin ke draf.');
+        return $this->afterReaders($request, $organization, $project, $record->galangan_id, 'Template disalin ke draf.');
     }
 
     public function readers(Request $request, string $organization, string $project): RedirectResponse
@@ -97,7 +99,7 @@ class WbsController extends Controller
         $data = $request->validate($this->readerRules());
         $this->baselines->readers($request->user(), $record, (bool) $data['restricted'], $data['readers']);
 
-        return $this->afterReaders($request, $organization, $project, $record->organization_id, 'Akses pembaca WBS diperbarui.');
+        return $this->afterReaders($request, $organization, $project, $record->galangan_id, 'Akses pembaca Form Builder diperbarui.');
     }
 
     public function cutoff(Request $request, string $organization, string $project): RedirectResponse

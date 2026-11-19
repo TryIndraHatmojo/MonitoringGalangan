@@ -8,40 +8,27 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('organizations', function (Blueprint $table): void {
-            $table->ulid('id')->primary();
-            $table->string('slug', 100)->unique();
-            $table->string('name');
-            $table->timestamps();
-        });
-
-        Schema::create('organization_members', function (Blueprint $table): void {
-            $table->foreignUlid('organization_id')->constrained()->cascadeOnDelete();
-            $table->foreignUlid('user_id')->constrained()->cascadeOnDelete();
-            $table->string('role', 40);
-            $table->boolean('active')->default(true);
-            $table->primary(['organization_id', 'user_id']);
-        });
-
-        Schema::create('organization_permissions', function (Blueprint $table): void {
-            $table->foreignUlid('organization_id')->constrained()->cascadeOnDelete();
-            $table->string('role', 40);
+        Schema::create('galangan_premissiontbls', function (Blueprint $table): void {
+            $table->foreignUlid('galangan_id')->constrained('galangantbls')->cascadeOnDelete();
+            $table->string('kode_role', 40);
+            $table->foreign('kode_role')->references('kode')->on('roletbls');
             $table->json('actions');
-            $table->primary(['organization_id', 'role']);
+            $table->primary(['galangan_id', 'kode_role']);
         });
 
         Schema::create('invitations', function (Blueprint $table): void {
             $table->ulid('id')->primary();
-            $table->foreignUlid('organization_id')->constrained()->cascadeOnDelete();
+            $table->foreignUlid('galangan_id')->constrained('galangantbls')->cascadeOnDelete();
             $table->string('email');
-            $table->string('role', 40);
+            $table->string('kode_role', 40);
+            $table->foreign('kode_role')->references('kode')->on('roletbls');
             $table->timestamp('expires_at');
             $table->timestamp('accepted_at')->nullable();
         });
 
         Schema::create('projects', function (Blueprint $table): void {
             $table->ulid('id')->primary();
-            $table->foreignUlid('organization_id')->constrained()->cascadeOnDelete();
+            $table->foreignUlid('galangan_id')->constrained('galangantbls')->cascadeOnDelete();
             $table->string('number', 80);
             $table->string('name');
             $table->string('ship_name');
@@ -58,7 +45,7 @@ return new class extends Migration
             $table->string('status', 20)->default('active');
             $table->boolean('wbs_restricted')->default(false);
             $table->timestamps();
-            $table->unique(['organization_id', 'number']);
+            $table->unique(['galangan_id', 'number']);
         });
 
         Schema::create('project_members', function (Blueprint $table): void {
@@ -87,7 +74,7 @@ return new class extends Migration
 
         Schema::create('audit_events', function (Blueprint $table): void {
             $table->id();
-            $table->foreignUlid('organization_id')->nullable()->constrained();
+            $table->foreignUlid('galangan_id')->nullable()->constrained('galangantbls');
             $table->foreignUlid('project_id')->nullable()->constrained();
             $table->foreignUlid('actor_id')->nullable()->constrained('users');
             $table->string('action', 80);
@@ -95,13 +82,13 @@ return new class extends Migration
             $table->text('reason')->nullable();
             $table->json('changes');
             $table->timestamp('created_at');
-            $table->index(['organization_id', 'project_id', 'id']);
+            $table->index(['galangan_id', 'project_id', 'id']);
         });
 
         Schema::create('personal_access_tokens', function (Blueprint $table): void {
             $table->id();
             $table->ulidMorphs('tokenable');
-            $table->foreignUlid('organization_id')->constrained()->cascadeOnDelete();
+            $table->foreignUlid('galangan_id')->constrained('galangantbls')->cascadeOnDelete();
             $table->string('device_id', 100);
             $table->string('name');
             $table->string('token', 64)->unique();
@@ -109,7 +96,7 @@ return new class extends Migration
             $table->timestamp('last_used_at')->nullable();
             $table->timestamp('expires_at')->nullable()->index();
             $table->timestamps();
-            $table->unique(['tokenable_type', 'tokenable_id', 'organization_id', 'device_id'], 'one_token_per_device');
+            $table->unique(['tokenable_type', 'tokenable_id', 'galangan_id', 'device_id'], 'one_token_per_device');
         });
 
         Schema::create('wbs_item_ids', function (Blueprint $table): void {
@@ -149,7 +136,7 @@ return new class extends Migration
         foreach ([
             'project_periods', 'baseline_revisions', 'wbs_item_ids', 'personal_access_tokens',
             'audit_events', 'project_documents', 'wbs_readers', 'project_members', 'projects',
-            'invitations', 'organization_permissions', 'organization_members', 'organizations',
+            'invitations', 'galangan_premissiontbls',
         ] as $table) {
             Schema::dropIfExists($table);
         }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\Access;
 use App\Services\Audit;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\RedirectResponse;
@@ -40,6 +41,12 @@ class AuthController extends Controller
 
         RateLimiter::clear($key);
         $request->session()->regenerate();
+
+        if ($organization = app(Access::class)->assignedOrganization($request->user())) {
+            $request->session()->forget('url.intended');
+
+            return redirect()->route('projects.index', $organization->slug);
+        }
 
         return redirect()->intended(route('home'));
     }

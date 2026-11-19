@@ -22,10 +22,15 @@ Artisan::command('monitoring:admin {--email=}', function (): int {
 
         return 1;
     }
+    if (! DB::table('roletbls')->where('kode', 'platform_admin')->exists()) {
+        $this->error('Isi katalog peran dengan php artisan db:seed --class=RoleSeeder.');
+
+        return 1;
+    }
 
     DB::transaction(function () use ($email, $name, $password): void {
         $user = new User(compact('email', 'name', 'password'));
-        $user->forceFill(['platform_admin' => true])->save();
+        $user->forceFill(['kode_role' => 'platform_admin'])->save();
         Audit::record(null, 'account.platform_admin_created', target: $user->id);
     });
     $this->info('Administrator pusat berhasil dibuat.');

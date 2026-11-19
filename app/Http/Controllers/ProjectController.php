@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Services\Access;
 use App\Services\Audit;
+use App\Services\ProjectContext;
+use Illuminate\Database\Query\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -20,27 +23,58 @@ use Throwable;
 
 class ProjectController extends Controller
 {
-    public function __construct(private readonly Access $access) {}
+    public function __construct(private readonly Access $access, private readonly ProjectContext $context) {}
 
     public function index(Request $request, string $organization): Response
     {
         $user = $request->user();
         $org = $this->access->organization($user, $organization);
-        $filters = $request->validate(['q' => 'nullable|string|max:100', 'status' => 'nullable|in:active,closed,archived']);
+        $filters = $request->validate($this->filterRules());
         $q = $filters['q'] ?? '';
         $status = $filters['status'] ?? '';
 
         return Inertia::render('Projects', [
             'organization' => $org,
-            'isAdmin' => $this->access->admin($user, $org->id),
+            'context' => $this->context->props($request, $org->id, 'projects'),
+            'canEditProfile' => in_array('projects.manage', $this->access->permissions($user, $org->id), true),
             'filters' => compact('q', 'status'),
-            'projects' => $this->access->projects($user, $org->id)->when($status !== '', fn ($query) => $query->where('status', $status))
-                ->when($q !== '', fn ($query) => $query->where(function ($query) use ($q): void {
-                    $query->whereLike('name', '%'.$q.'%')->orWhereLike('number', '%'.$q.'%')->orWhereLike('ship_name', '%'.$q.'%');
-                }))->orderBy('number')->orderBy('id')->paginate(25, [
-                    'id', 'number', 'name', 'ship_name', 'ship_type', 'start_date', 'target_date', 'status',
+            'projects' => $this->searchProjects($request, $org->id, $q)->when($status !== '', fn ($query) => $query->where('status', $status))
+                ->paginate(25, [
+                    'id', 'number', 'name', 'ship_name', 'ship_type', 'shipyard', 'start_date', 'target_date', 'status',
                 ])->withQueryString(),
         ]);
+    }
+
+    public function options(Request $request, string $organization): JsonResponse
+    {
+        $org = $this->access->organization($request->user(), $organization);
+        $data = $request->validate(['q' => 'nullable|string|max:100', 'page' => 'sometimes|integer|min:1']);
+        $options = $this->searchProjects($request, $org->id, $data['q'] ?? '')
+            ->simplePaginate(25, ['id', 'number', 'ship_name'])->withQueryString();
+
+        return response()->json(['data' => $options->items(), 'next_page_url' => $options->nextPageUrl()])
+            ->header('Cache-Control', 'no-store');
+    }
+
+    public function select(Request $request, string $organization): RedirectResponse
+    {
+        $org = $this->access->organization($request->user(), $organization);
+        $data = $request->validate($this->filterRules() + [
+            'project_id' => 'required|ulid',
+            'destination' => 'required|in:projects,profile,builder',
+            'page' => 'nullable|integer|min:1',
+        ]);
+        $project = $this->access->project($request->user(), $org->id, $data['project_id']);
+        $this->context->remember($request, $org->id, $project->id);
+
+        if ($data['destination'] === 'projects') {
+            return redirect()->route('projects.index', ['organization' => $org->slug] + Arr::only($data, ['q', 'status', 'page']), 303);
+        }
+        $route = $data['destination'] === 'builder' && $this->access->allows($request->user(), $project, 'wbs.view')
+            ? 'wbs.show'
+            : 'projects.show';
+
+        return redirect()->route($route, [$org->slug, $project->id], 303);
     }
 
     public function show(Request $request, string $organization, string $project): Response
@@ -54,11 +88,12 @@ class ProjectController extends Controller
 
         return Inertia::render('Project', [
             'organization' => $org,
+            'context' => $this->context->props($request, $org->id, 'profile', $record),
             'project' => $this->access->serializeProject($user, $record),
             'can' => $can,
             'members' => $can['projects.members']
-                ? $this->access->members($org->id)->where('members.active', true)->where('users.active', true)
-                    ->orderBy('users.name')->get(['users.id', 'users.name', 'members.role'])
+                ? $this->access->members($org->id)->where('users.keanggotaan_aktif', true)->where('users.active', true)
+                    ->orderBy('users.name')->get(['users.id', 'users.name', 'users.kode_role as role'])
                 : [],
             'assignments' => $can['projects.members'] ? DB::table('project_members')->where('project_id', $project)
                 ->get(['user_id', 'is_pic']) : [],
@@ -79,11 +114,11 @@ class ProjectController extends Controller
         $id = (string) Str::ulid();
 
         DB::transaction(function () use ($request, $org, $data, $id): void {
-            DB::table('organizations')->where('id', $org->id)->lockForUpdate()->first();
-            if (DB::table('projects')->where('organization_id', $org->id)->where('number', $data['number'])->exists()) {
+            DB::table('galangantbls')->where('id', $org->id)->lockForUpdate()->first();
+            if (DB::table('projects')->where('galangan_id', $org->id)->where('number', $data['number'])->exists()) {
                 throw ValidationException::withMessages(['number' => 'Nomor proyek sudah dipakai di organisasi ini.']);
             }
-            DB::table('projects')->insert($data + ['id' => $id, 'organization_id' => $org->id, 'created_at' => now(), 'updated_at' => now()]);
+            DB::table('projects')->insert($data + ['id' => $id, 'galangan_id' => $org->id, 'created_at' => now(), 'updated_at' => now()]);
             Audit::record($request->user(), 'project.created', $org->id, $id, $id, $data);
         });
 
@@ -100,9 +135,9 @@ class ProjectController extends Controller
         }
 
         DB::transaction(function () use ($request, $org, $project, $data): void {
-            DB::table('organizations')->where('id', $org->id)->lockForUpdate()->first();
+            DB::table('galangantbls')->where('id', $org->id)->lockForUpdate()->first();
             $before = DB::table('projects')->where('id', $project)->lockForUpdate()->first();
-            if (DB::table('projects')->where('organization_id', $org->id)->where('number', $data['number'])->where('id', '!=', $project)->exists()) {
+            if (DB::table('projects')->where('galangan_id', $org->id)->where('number', $data['number'])->where('id', '!=', $project)->exists()) {
                 throw ValidationException::withMessages(['number' => 'Nomor proyek sudah dipakai di organisasi ini.']);
             }
             DB::table('projects')->where('id', $project)->update($data + ['updated_at' => now()]);
@@ -129,7 +164,7 @@ class ProjectController extends Controller
             abort_if($current->status !== 'active', 409, 'Aktifkan proyek untuk mengubah penugasan.');
             $ids = array_column($data['members'], 'id');
             $count = $this->access->members($org->id)->whereIn('users.id', $ids)
-                ->where('users.active', true)->where('members.active', true)->count();
+                ->where('users.active', true)->where('users.keanggotaan_aktif', true)->count();
             if ($count !== count($ids)) {
                 throw ValidationException::withMessages(['members' => 'Pilih anggota aktif dari organisasi proyek.']);
             }
@@ -218,10 +253,24 @@ class ProjectController extends Controller
         return [$org, $this->access->project($request->user(), $org->id, $project)];
     }
 
+    private function filterRules(): array
+    {
+        return ['q' => 'nullable|string|max:100', 'status' => 'nullable|in:active,closed,archived'];
+    }
+
+    private function searchProjects(Request $request, string $organization, string $query): Builder
+    {
+        return $this->access->projects($request->user(), $organization)
+            ->when($query !== '', fn ($projects) => $projects->where(function ($projects) use ($query): void {
+                $term = '%'.$query.'%';
+                $projects->whereLike('name', $term)->orWhereLike('number', $term)->orWhereLike('ship_name', $term);
+            }))->orderBy('number')->orderBy('projects.id');
+    }
+
     private function validateProject(Request $request, string $organization, ?string $project = null): array
     {
         $request->merge(['number' => Str::upper(trim((string) $request->input('number')))]);
-        $number = Rule::unique('projects')->where('organization_id', $organization);
+        $number = Rule::unique('projects')->where('galangan_id', $organization);
         if ($project !== null) {
             $number->ignore($project);
         }

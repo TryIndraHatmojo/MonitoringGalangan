@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -12,14 +13,21 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, HasUlids, Notifiable;
 
-    protected $attributes = ['active' => true, 'platform_admin' => false];
+    protected $attributes = ['active' => true, 'keanggotaan_aktif' => true];
 
     protected $fillable = ['name', 'email', 'password'];
 
     protected $hidden = ['password', 'remember_token'];
 
+    protected $appends = ['platform_admin'];
+
+    protected function platformAdmin(): Attribute
+    {
+        return Attribute::get(fn (): bool => $this->kode_role === 'platform_admin');
+    }
+
     protected function casts(): array
     {
-        return ['password' => 'hashed', 'active' => 'boolean', 'platform_admin' => 'boolean'];
+        return ['password' => 'hashed', 'active' => 'boolean', 'keanggotaan_aktif' => 'boolean'];
     }
 }
