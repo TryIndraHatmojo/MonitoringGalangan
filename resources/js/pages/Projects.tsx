@@ -1,3 +1,4 @@
+import { Link } from '@inertiajs/react';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Button } from '@/components/ui/button';
@@ -51,7 +52,7 @@ export default function Projects({ organization, projects, context, canEditProfi
                         <StatusBadge status={project.status} />
                     </div>
                     <div>
-                        <h2>{project.ship_name}</h2>
+                        <h2><Link href={url + '/' + project.id} className="hover:text-primary hover:underline">{project.ship_name}</Link></h2>
                         <p className="help">{project.ship_type} · {project.number}</p>
                         {project.name !== project.ship_name && <p className="mt-1 text-sm">{project.name}</p>}
                     </div>
