@@ -5,6 +5,7 @@
         "moduleResolution": "Bundler",
         "jsx": "react-jsx",
         "strict": true,
+        "paths": { "@/*": ["./resources/js/*"] },
         "noEmit": true,
         "skipLibCheck": true,
         "types": ["vite/client"]
