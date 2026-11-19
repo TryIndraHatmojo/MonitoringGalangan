@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Services\Access;
 use App\Services\ProjectContext;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -26,7 +27,7 @@ class HandleInertiaRequests extends Middleware
                     'canManageOrganization' => $organization && $access->admin($user, $organization->id),
                 ];
             },
-            'activeProject' => fn () => app(ProjectContext::class)->active($request),
+            'activeProject' => Inertia::always(fn () => app(ProjectContext::class)->active($request)),
             'notice' => fn () => $request->session()->get('notice'),
         ];
     }

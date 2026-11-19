@@ -190,18 +190,23 @@ class MonitoringTest extends TestCase
         $first = $this->project($a);
         $second = $this->project($a, ['number' => 'NB-02', 'ship_name' => 'Tug kedua', 'wbs_restricted' => true]);
         $unassigned = $this->project($a, ['number' => 'NB-03']);
-        $outside = $this->project($b);
+        $archived = $this->project($a, ['number' => 'NB-00', 'status' => 'archived']);
+        $outside = $this->project($b, ['number' => 'NB-00']);
         $planner = $this->member($a, 'planner');
         $this->assign($planner, $first);
         $this->assign($planner, $second);
+        $this->assign($planner, $archived);
         $base = '/org/dock-a';
-        $this->actingAs($planner)->withSession(['active_projects.'.$a => $first])
-            ->get('/')->assertInertia(fn (AssertableInertia $page) => $page->component('Dashboard')->where('activeProject', null));
-        $this->get($base.'/projects')->assertInertia(fn (AssertableInertia $page) => $page->where('activeProject', null));
-        $this->get($base.'/projects/'.$first)->assertInertia(fn (AssertableInertia $page) => $page->where('activeProject', null));
-        $this->get($base.'/projects/'.$first.'/wbs')->assertInertia(fn (AssertableInertia $page) => $page->where('activeProject', null));
+        $this->actingAs($planner)->withSession(['active_projects.'.$a => $first]);
+        $this->get('/')->assertInertia(fn (AssertableInertia $page) => $page->component('Dashboard')
+            ->where('activeProject.id', $first)->where('activeProject.canOpenBuilder', true));
+        $this->get($base.'/projects')->assertInertia(fn (AssertableInertia $page) => $page->where('activeProject.id', $first));
+        $this->get('/org/dock-b/projects/'.$outside)->assertNotFound();
+        $this->get($base.'/projects/'.$unassigned)->assertNotFound();
+        $this->get($base.'/projects/'.$second.'/wbs')->assertForbidden();
+        $this->get('/')->assertInertia(fn (AssertableInertia $page) => $page->where('activeProject.id', $first));
         $this->getJson($base.'/project-options?q=Tug')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $second);
-        $this->getJson('/project-options')->assertOk()->assertJsonCount(2, 'data');
+        $this->getJson('/project-options')->assertOk()->assertJsonCount(3, 'data');
         $this->getJson('/org/dock-b/project-options')->assertNotFound();
         foreach ([$unassigned, $outside] as $denied) {
             $this->post($base.'/active-project', ['project_id' => $denied, 'destination' => 'projects'])->assertNotFound();
@@ -212,7 +217,10 @@ class MonitoringTest extends TestCase
         $this->get('/')->assertInertia(fn (AssertableInertia $page) => $page->component('Dashboard')
             ->where('activeProject.id', $first)->where('activeProject.canOpenBuilder', true));
         $this->get($base.'/projects/'.$second)->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('project.id', $second)->where('activeProject.id', $first));
+            ->where('project.id', $second)->where('activeProject.id', $second)->where('activeProject.canOpenBuilder', false));
+        $this->get('/')->assertInertia(fn (AssertableInertia $page) => $page->where('activeProject.id', $second));
+        $this->get($base.'/projects/'.$first.'/wbs')->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('activeProject.id', $first)->where('activeProject.canOpenBuilder', true));
         $this->post($base.'/active-project', ['project_id' => $second, 'destination' => 'projects', 'q' => 'Tug'])
             ->assertStatus(303)->assertRedirect($base.'/projects?q=Tug');
         $this->get($base.'/projects')->assertInertia(fn (AssertableInertia $page) => $page
@@ -222,6 +230,11 @@ class MonitoringTest extends TestCase
         $this->post($base.'/active-project', ['project_id' => $first, 'destination' => 'builder'])
             ->assertStatus(303)->assertRedirect($base.'/projects/'.$first.'/wbs');
         DB::table('project_members')->where('project_id', $first)->where('user_id', $planner->id)->delete();
+        $this->get($base.'/projects')->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('activeProject.id', $second)->where('activeProject.canOpenBuilder', false));
+        DB::table('project_members')->where('project_id', $second)->where('user_id', $planner->id)->delete();
+        $this->get($base.'/projects')->assertInertia(fn (AssertableInertia $page) => $page->where('activeProject.id', $archived));
+        DB::table('project_members')->where('project_id', $archived)->where('user_id', $planner->id)->delete();
         $this->get($base.'/projects')->assertInertia(fn (AssertableInertia $page) => $page->where('activeProject', null));
     }
 
@@ -245,8 +258,10 @@ class MonitoringTest extends TestCase
         $this->post('/org/dock-a/active-project', ['project_id' => $second, 'destination' => 'dashboard'])->assertNotFound();
         $this->from('/')->post('/active-project', ['project_id' => $second, 'destination' => '/login'])->assertSessionHasErrors('destination');
         $this->get('/')->assertInertia(fn (AssertableInertia $page) => $page->where('activeProject.id', $first));
+        $this->post('/active-project', ['project_id' => $second, 'destination' => 'dashboard'])->assertRedirect('/');
         $member = $this->member($a, 'administrator');
-        $this->actingAs($member)->get('/')->assertInertia(fn (AssertableInertia $page) => $page->where('activeProject', null));
+        $this->actingAs($member)->get('/')->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('activeProject.id', $first)->where('activeProject.organization.slug', 'dock-a'));
     }
 
     public function test_private_documents_require_project_and_document_permission(): void

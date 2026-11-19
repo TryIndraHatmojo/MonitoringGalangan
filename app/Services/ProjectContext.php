@@ -13,14 +13,27 @@ final class ProjectContext
     public function active(Request $request): ?array
     {
         $user = $request->user();
+        if (! $user) {
+            return null;
+        }
+
         $selection = $request->session()->get(self::SESSION_KEY);
-        if (! $user || ($selection['user_id'] ?? null) !== $user->id) {
-            return null;
-        }
-        $project = $this->access->selectableProjects($user)->where('projects.id', $selection['project_id'])->first();
+        $projects = $this->access->selectableProjects($user);
+        $project = ($selection['user_id'] ?? null) === $user->id
+            ? (clone $projects)->where('projects.id', $selection['project_id'])->first()
+            : null;
+
         if (! $project) {
-            return null;
+            $project = $projects->orderByRaw('CASE WHEN projects.status = ? THEN 0 ELSE 1 END', ['active'])
+                ->orderBy('projects.number')->orderBy('projects.id')->first();
+            if (! $project) {
+                $request->session()->forget(self::SESSION_KEY);
+
+                return null;
+            }
+            $this->remember($request, $project->id);
         }
+
         $organization = $this->access->organization($user, $project->galangan_id, 'id');
 
         return [

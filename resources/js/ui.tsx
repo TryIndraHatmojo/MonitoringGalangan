@@ -1,5 +1,5 @@
 import { Head, Link, usePage } from '@inertiajs/react';
-import { Anchor, ArrowLeft, ArrowRight, Building2, CheckCircle2, CircleAlert, LayoutDashboard, ListTree, LogOut, Server, Ship, UserRound } from 'lucide-react';
+import { Anchor, ArrowLeft, ArrowRight, Building2, CheckCircle2, ChevronDown, CircleAlert, LayoutDashboard, ListTree, LogOut, Server, Ship, UserRound } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -46,6 +46,9 @@ export function Shell({ title, organization, destination, actions, beforeProject
     const localMaster = auth.canManageOrganization && directoryPath;
     const usersPath = centralMaster ? '/data-master/user' : directoryPath && directoryPath + '/users';
     const rolesPath = centralMaster ? '/data-master/role' : directoryPath;
+    const masterUsersActive = path === usersPath || (centralMaster && destination === 'org_users');
+    const masterShipyardsActive = path === '/data-master/galangan';
+    const masterRolesActive = path === rolesPath || (centralMaster && destination === 'org_roles');
 
     return <>
         <Head title={title} />
@@ -61,14 +64,14 @@ export function Shell({ title, organization, destination, actions, beforeProject
                         {orgPath && <Link href={orgPath + '/projects'} aria-current={path === orgPath + '/projects' ? 'page' : undefined}><Ship />Proyek Kapal</Link>}
                         {projectPath && <Link href={projectPath} aria-current={path === projectPath ? 'page' : undefined}><Ship />Ringkasan proyek</Link>}
                         {projectPath && activeProject?.canOpenBuilder && <Link href={projectPath + '/wbs'} aria-current={path === projectPath + '/wbs' ? 'page' : undefined}><ListTree />Form Builder</Link>}
-                        {(centralMaster || localMaster) && <div className="sidebar-group" role="group" aria-label="Data Master">
-                            <span><Building2 aria-hidden="true" />Data Master</span>
+                        {(centralMaster || localMaster) && <details className="sidebar-group" open={masterUsersActive || masterShipyardsActive || masterRolesActive}>
+                            <summary><Building2 aria-hidden="true" />Data Master<ChevronDown className="sidebar-group-chevron" aria-hidden="true" /></summary>
                             <div>
-                                {usersPath && <Link href={usersPath} aria-current={path === usersPath || (centralMaster && destination === 'org_users') ? 'page' : undefined}>User</Link>}
-                                {centralMaster && <Link href="/data-master/galangan" aria-current={path === '/data-master/galangan' ? 'page' : undefined}>Galangan</Link>}
-                                {rolesPath && <Link href={rolesPath} aria-current={path === rolesPath || (centralMaster && destination === 'org_roles') ? 'page' : undefined}>Role</Link>}
+                                {usersPath && <Link href={usersPath} aria-current={masterUsersActive ? 'page' : undefined}>User</Link>}
+                                {centralMaster && <Link href="/data-master/galangan" aria-current={masterShipyardsActive ? 'page' : undefined}>Galangan</Link>}
+                                {rolesPath && <Link href={rolesPath} aria-current={masterRolesActive ? 'page' : undefined}>Role</Link>}
                             </div>
-                        </div>}
+                        </details>}
                         <Link href="/devices" aria-current={path === '/devices' ? 'page' : undefined}><Server />Perangkat API</Link>
                     </nav>
                 </div>

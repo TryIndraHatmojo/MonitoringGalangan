@@ -81,6 +81,7 @@ class ProjectController extends Controller
         foreach (Access::ACTIONS as $action => $label) {
             $can[$action] = $this->access->allows($user, $record, $action);
         }
+        $this->context->remember($request, $record->id);
 
         return Inertia::render('Project', [
             'organization' => $org,
