@@ -46,6 +46,11 @@ final class Baselines
             $this->assertDraft($draft, $data);
             $this->withinProject($data['effective_month'], $project);
             $snapshot = WbsSnapshot::validate($data['snapshot'], $project);
+            // Reviewer roles in snapshots have no foreign key to prevent concurrent deletion.
+            $reviewerRoles = array_unique(array_filter(array_column($snapshot['nodes'], 'reviewer_role')));
+            if ($reviewerRoles !== []) {
+                app(Access::class)->lockRoles($reviewerRoles, 'nodes');
+            }
             $this->registerItemIds($project, $snapshot);
             $previous = $this->snapshot($draft);
             if ($copyTemplate) {

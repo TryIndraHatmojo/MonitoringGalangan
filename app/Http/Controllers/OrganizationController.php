@@ -86,6 +86,7 @@ class OrganizationController extends Controller
 
         DB::transaction(function () use ($request, $org, $role, $actions): void {
             DB::table('galangantbls')->where('id', $org->id)->lockForUpdate()->first();
+            $this->access->lockRoles([$role], 'role');
             $before = $this->access->actions($org->id, $role);
             DB::table('galangan_premissiontbls')->updateOrInsert(
                 ['galangan_id' => $org->id, 'kode_role' => $role],
@@ -107,6 +108,7 @@ class OrganizationController extends Controller
 
         DB::transaction(function () use ($request, $org, $data, $email, $id, $expires): void {
             DB::table('galangantbls')->where('id', $org->id)->lockForUpdate()->first();
+            $this->access->lockRoles([$data['role']], 'role');
             $this->invitedUser($email, $org->id, lock: true);
             DB::table('invitations')->where('galangan_id', $org->id)->where('email', $email)
                 ->whereNull('accepted_at')->update(['expires_at' => now()]);
@@ -190,6 +192,7 @@ class OrganizationController extends Controller
         $data['active'] = (bool) $data['active'];
         DB::transaction(function () use ($request, $org, $member, $data): void {
             DB::table('galangantbls')->where('id', $org->id)->lockForUpdate()->first();
+            $this->access->lockRoles([$data['role']], 'role');
             $user = User::query()->where('galangan_id', $org->id)->whereKey($member)->lockForUpdate()->firstOrFail();
             $before = ['role' => $user->kode_role, 'active' => $user->keanggotaan_aktif];
 

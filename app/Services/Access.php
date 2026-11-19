@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 final class Access
 {
@@ -54,6 +55,14 @@ final class Access
         $roles = DB::table('roletbls')->where('kode', '!=', 'platform_admin')->pluck('nama', 'kode')->all();
 
         return array_replace(array_intersect_key(self::ROLES, $roles), $roles);
+    }
+
+    public function lockRoles(array $codes, string $field): void
+    {
+        $found = DB::table('roletbls')->whereIn('kode', $codes)->orderBy('kode')->sharedLock()->pluck('kode');
+        if (array_diff($codes, $found->all()) !== []) {
+            throw ValidationException::withMessages([$field => 'Role sudah tidak tersedia. Pilih role lain.']);
+        }
     }
 
     public function organizations(): Collection
