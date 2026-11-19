@@ -161,6 +161,120 @@ class MonitoringTest extends TestCase
         $this->assertDatabaseHas('invitations', ['id' => $invitation, 'accepted_at' => null]);
     }
 
+    public function test_platform_administrator_can_manage_users_and_revoke_access(): void
+    {
+        $url = '/data-master/user';
+        $organization = $this->organization('dock-a');
+        $outside = $this->organization('dock-b');
+        $admin = $this->admin();
+        $password = 'master-user-test-password';
+        $data = [
+            'name' => 'Inspektur Baru', 'email' => 'INSPEKTUR@example.test', 'role' => 'viewer',
+            'active' => true, 'password' => $password, 'password_confirmation' => $password,
+        ];
+        $this->actingAs($admin)->from($url);
+        $this->post($url, $data)->assertSessionHasErrors('galangan_id');
+        $this->post($url, ['role' => 'platform_admin', 'galangan_id' => $organization] + $data)->assertSessionHasErrors('galangan_id');
+        $this->post($url, $data + ['galangan_id' => $organization])->assertRedirect($url)->assertSessionHasNoErrors();
+        $this->post($url, $data + ['galangan_id' => $organization])->assertSessionHasErrors('email');
+        $user = User::query()->where('email', 'inspektur@example.test')->firstOrFail();
+        $this->assertTrue(Hash::check($password, $user->password));
+        $this->assertSame($organization, $user->galangan_id);
+        $project = $this->project($organization, ['wbs_restricted' => true]);
+        $this->assign($user, $project);
+        DB::table('wbs_readers')->insert(['project_id' => $project, 'user_id' => $user->id]);
+        $this->get($url)->assertInertia(fn (AssertableInertia $page) => $page->has('accounts.data', 2)
+            ->where('roles.viewer', 'Management / Viewer')->missing('accounts.data.0.password'));
+
+        $oldToken = $this->issue($user, 'dock-a', $password);
+        $update = ['name' => 'Inspektur QC', 'email' => 'qc@example.test', 'role' => 'planner', 'active' => true];
+        $account = $url.'/'.$user->id;
+        $this->actingAs($admin, 'web')->from($url)->patch($account, $update + ['galangan_id' => $outside])->assertSessionHasErrors('galangan_id');
+        $this->patch($account, ['role' => 'platform_admin'] + $update)->assertSessionHasErrors('role');
+        $this->patch($account, $update)->assertRedirect($url)->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'galangan_id' => $organization, 'email' => 'qc@example.test', 'kode_role' => 'planner']);
+        $this->api('/api/v1/me', $oldToken)->assertUnauthorized();
+        $password = 'master-user-new-password';
+        $this->actingAs($admin, 'web')->patch($account, $update + ['password' => $password, 'password_confirmation' => $password])->assertRedirect($url);
+        $user->refresh();
+        $token = $this->issue($user, 'dock-a', $password);
+        DB::table('sessions')->insert(['id' => 'master-user-session', 'user_id' => $user->id, 'payload' => '', 'last_activity' => 1]);
+
+        $this->actingAs($admin, 'web')->from($url)->delete($url.'/'.strtoupper($admin->id))->assertSessionHasErrors('user');
+        $this->delete($account)->assertRedirect($url)->assertSessionHasNoErrors();
+        $this->assertNotNull(User::withTrashed()->findOrFail($user->id)->dihapus_pada);
+        $this->assertDatabaseMissing('sessions', ['id' => 'master-user-session']);
+        $this->api('/api/v1/me', $token)->assertUnauthorized();
+        $this->tokenRequest($user, 'dock-a', $password)->assertUnauthorized();
+        $this->actingAs($admin, 'web')->get($url)->assertInertia(fn (AssertableInertia $page) => $page->has('accounts.data', 1));
+        $this->get('/org/dock-a/access/users')->assertInertia(fn (AssertableInertia $page) => $page->has('members', 0));
+        $this->get('/org/dock-a/projects/'.$project.'/wbs')->assertInertia(fn (AssertableInertia $page) => $page->has('readers', 0));
+        $this->assertDatabaseHas('wbs_readers', ['project_id' => $project, 'user_id' => $user->id]);
+        $this->post('/org/dock-a/access/invitations', ['email' => $user->email, 'role' => 'viewer'])->assertSessionHasErrors('email');
+        foreach (['account.created', 'account.updated', 'account.deleted'] as $action) {
+            $this->assertDatabaseHas('audit_events', ['actor_id' => $admin->id, 'action' => $action, 'target_id' => $user->id, 'galangan_id' => $organization]);
+        }
+        $changes = DB::table('audit_events')->where('action', 'account.updated')->where('target_id', $user->id)->latest('id')->value('changes');
+        $this->assertTrue(json_decode($changes, true, flags: JSON_THROW_ON_ERROR)['password_changed']);
+        $this->assertStringNotContainsString($password, $changes);
+        $this->assertStringNotContainsString($user->password, $changes);
+    }
+
+    public function test_platform_administrator_can_manage_shipyards_and_keep_their_audit(): void
+    {
+        $url = '/data-master/galangan';
+        $admin = $this->admin();
+        $this->organization('dock-existing');
+        $this->actingAs($admin)->from($url)->post('/org', ['name' => 'Galangan Baru', 'slug' => 'dock-new'])->assertRedirect($url);
+        $organization = DB::table('galangantbls')->where('slug', 'dock-new')->value('id');
+        $record = $url.'/'.$organization;
+        $this->patch($record, ['name' => 'Galangan Ubah', 'slug' => 'dock-existing'])->assertSessionHasErrors('slug');
+        $this->patch($record, ['name' => 'Galangan Ubah', 'slug' => 'dock-updated'])->assertRedirect($url);
+        $this->get('/org/dock-new/projects')->assertNotFound();
+        $this->get('/org/dock-updated/projects')->assertOk();
+        $token = $this->issue($admin, 'dock-updated');
+        $this->actingAs($admin, 'web')->delete($record)->assertRedirect($url)->assertSessionHasNoErrors();
+        $this->assertNotNull(DB::table('galangantbls')->where('id', $organization)->value('dihapus_pada'));
+        $this->actingAs($admin, 'web')->get('/org/dock-updated/projects')->assertNotFound();
+        $this->get($url)->assertInertia(fn (AssertableInertia $page) => $page->has('organizations', 1)->where('organizations.0.slug', 'dock-existing'));
+        $this->api('/api/v1/me', $token)->assertUnauthorized();
+        $this->tokenRequest($admin, 'dock-updated')->assertUnauthorized();
+        foreach (['organization.created', 'organization.updated', 'organization.deleted'] as $action) {
+            $this->assertDatabaseHas('audit_events', ['actor_id' => $admin->id, 'action' => $action, 'target_id' => $organization, 'galangan_id' => $organization]);
+        }
+    }
+
+    public function test_master_user_and_shipyard_mutations_preserve_organization_boundaries(): void
+    {
+        $a = $this->organization('dock-a');
+        $b = $this->organization('dock-b');
+        $c = $this->organization('dock-c');
+        $local = $this->member($a, 'administrator');
+        $user = $this->member($b);
+        $this->project($a, ['status' => 'archived']);
+        DB::table('invitations')->insert([
+            'id' => (string) Str::ulid(), 'email' => 'pending@example.test', 'galangan_id' => $c,
+            'kode_role' => 'viewer', 'expires_at' => now()->addHour(),
+        ]);
+        $account = '/data-master/user/'.$user->id;
+        $shipyards = '/data-master/galangan';
+        foreach ([$local, $user] as $actor) {
+            $this->actingAs($actor)->post('/data-master/user')->assertForbidden();
+            $this->patch($account)->assertForbidden();
+            $this->delete($account)->assertForbidden();
+            $this->post('/org')->assertForbidden();
+            $this->patch($shipyards.'/'.$a)->assertForbidden();
+            $this->delete($shipyards.'/'.$b)->assertForbidden();
+        }
+        $this->actingAs($local)->patch('/org/dock-b/access/members/'.$user->id, ['role' => 'planner', 'active' => true])->assertNotFound();
+        $this->actingAs($this->admin())->from($shipyards);
+        foreach ([$a, $b, $c] as $organization) {
+            $this->delete($shipyards.'/'.$organization)->assertSessionHasErrors('galangan');
+            $this->assertDatabaseHas('galangantbls', ['id' => $organization, 'dihapus_pada' => null]);
+            $this->assertDatabaseMissing('audit_events', ['action' => 'organization.deleted', 'target_id' => $organization]);
+        }
+    }
+
     public function test_platform_administrator_can_create_rename_and_delete_roles_with_audit(): void
     {
         $url = '/data-master/role';

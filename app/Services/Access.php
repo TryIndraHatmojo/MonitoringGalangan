@@ -40,6 +40,8 @@ final class Access
     ];
 
     public const PLATFORM_ACTIONS = [
+        'accounts.manage' => 'Kelola master user',
+        'shipyards.manage' => 'Kelola master galangan',
         'roles.manage' => 'Kelola master role',
     ];
 
@@ -76,7 +78,20 @@ final class Access
 
     public function organizations(): Collection
     {
-        return DB::table('galangantbls')->orderBy('name')->orderBy('id')->get(['id', 'slug', 'name']);
+        return $this->shipyards()->orderBy('name')->orderBy('id')->get(['id', 'slug', 'name']);
+    }
+
+    public function shipyards(): Builder
+    {
+        return DB::table('galangantbls')->whereNull('dihapus_pada');
+    }
+
+    public function lockOrganization(string $id): object
+    {
+        $organization = $this->shipyards()->where('id', $id)->lockForUpdate()->first();
+        abort_unless($organization, 404);
+
+        return $organization;
     }
 
     public function assignedOrganization(User $user): ?object
@@ -85,12 +100,12 @@ final class Access
             return null;
         }
 
-        return DB::table('galangantbls')->where('id', $user->galangan_id)->first(['id', 'slug', 'name']);
+        return $this->shipyards()->where('id', $user->galangan_id)->first(['id', 'slug', 'name']);
     }
 
     public function organization(User $user, string $key, string $field = 'slug'): object
     {
-        $organization = DB::table('galangantbls')->where($field, $key)->first();
+        $organization = $this->shipyards()->where($field, $key)->first();
         abort_unless($organization && $this->canAccessOrganization($user, $organization->id), 404);
 
         return $organization;
@@ -214,7 +229,7 @@ final class Access
 
     public function members(string $organization): Builder
     {
-        return DB::table('users')->where('users.galangan_id', $organization);
+        return DB::table('users')->where('users.galangan_id', $organization)->whereNull('users.dihapus_pada');
     }
 
     public function serializeProject(User $user, object $project): array

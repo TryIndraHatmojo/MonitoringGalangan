@@ -166,6 +166,9 @@ export function AuditList({ entries, showChanges = false }: { entries: AuditEven
     if (!entries.length) return <p className="empty">Belum ada perubahan tercatat.</p>;
     const labels: Record<string, string> = {
         'organization.created': 'Organisasi dibuat', 'organization.permissions_changed': 'Hak akses diperbarui',
+        'organization.updated': 'Galangan diperbarui', 'organization.deleted': 'Galangan dihapus',
+        'account.created': 'User ditambahkan', 'account.updated': 'User diperbarui',
+        'account.status_changed': 'Status user diperbarui', 'account.deleted': 'User dihapus',
         'organization.invited': 'Undangan dibuat', 'organization.invitation_accepted': 'Undangan diterima',
         'organization.membership_changed': 'Keanggotaan diperbarui', 'project.created': 'Proyek dibuat',
         'project.updated': 'Proyek diperbarui', 'project.assignments_changed': 'Penugasan diperbarui',

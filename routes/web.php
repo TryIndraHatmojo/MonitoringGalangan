@@ -1,10 +1,12 @@
 <?php
 
+use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DeviceController;
 use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\ShipyardController;
 use App\Http\Controllers\WbsController;
 use App\Http\Middleware\ActiveAccount;
 use Illuminate\Support\Facades\Route;
@@ -21,14 +23,19 @@ Route::post('invitation/{invitation}', [OrganizationController::class, 'accept']
 Route::middleware(['auth', ActiveAccount::class])->group(function (): void {
     Route::inertia('/', 'Dashboard')->name('home');
     Route::post('logout', [AuthController::class, 'logout'])->name('logout');
-    Route::get('data-master/user', [OrganizationController::class, 'masterUsers'])->name('master.users');
-    Route::get('data-master/galangan', [OrganizationController::class, 'masterShipyards'])->name('master.shipyards');
+    Route::get('data-master/user', [AccountController::class, 'index'])->name('master.users');
+    Route::post('data-master/user', [AccountController::class, 'store']);
+    Route::patch('data-master/user/{account}', [AccountController::class, 'update'])->whereUlid('account');
+    Route::delete('data-master/user/{account}', [AccountController::class, 'destroy'])->whereUlid('account');
+    Route::get('data-master/galangan', [ShipyardController::class, 'index'])->name('master.shipyards');
+    Route::patch('data-master/galangan/{shipyard}', [ShipyardController::class, 'update'])->whereUlid('shipyard');
+    Route::delete('data-master/galangan/{shipyard}', [ShipyardController::class, 'destroy'])->whereUlid('shipyard');
     Route::get('data-master/role', [RoleController::class, 'index'])->name('master.roles');
     Route::post('data-master/role', [RoleController::class, 'store']);
     Route::patch('data-master/role/{role}', [RoleController::class, 'update']);
     Route::delete('data-master/role/{role}', [RoleController::class, 'destroy']);
-    Route::post('org', [OrganizationController::class, 'create']);
-    Route::patch('accounts/{account}', [OrganizationController::class, 'account']);
+    Route::post('org', [ShipyardController::class, 'store']);
+    Route::patch('accounts/{account}', [AccountController::class, 'status'])->whereUlid('account');
     Route::get('devices', [DeviceController::class, 'index'])->name('devices.index');
     Route::delete('devices/{device}', [DeviceController::class, 'revoke']);
     Route::get('project-options', [ProjectController::class, 'options']);

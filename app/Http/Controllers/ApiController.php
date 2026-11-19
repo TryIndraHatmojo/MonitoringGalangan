@@ -34,7 +34,7 @@ class ApiController extends Controller
         $issued = DB::transaction(function () use ($data): array {
             $email = Str::lower($data['email']);
             $slug = $data['organization'] ?? null;
-            $org = DB::table('galangantbls')
+            $org = $this->access->shipyards()
                 ->when($slug !== null, fn ($query) => $query->where('slug', $slug),
                     fn ($query) => $query->where('id', User::query()->select('galangan_id')->where('email', $email)))
                 ->lockForUpdate()->first();

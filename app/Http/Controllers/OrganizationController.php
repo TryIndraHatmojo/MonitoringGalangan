@@ -23,44 +23,6 @@ class OrganizationController extends Controller
 {
     public function __construct(private readonly Access $access) {}
 
-    public function masterUsers(Request $request): Response
-    {
-        abort_unless($this->access->platformAdmin($request->user()), 403);
-
-        return Inertia::render('Master', [
-            'section' => 'users',
-            'organizations' => $this->access->organizations(),
-            'accounts' => User::query()->orderBy('name')->orderBy('id')
-                ->paginate(30, ['id', 'name', 'email', 'active', 'kode_role'])->withQueryString(),
-        ]);
-    }
-
-    public function masterShipyards(Request $request): Response
-    {
-        abort_unless($this->access->platformAdmin($request->user()), 403);
-
-        return Inertia::render('Master', [
-            'section' => 'shipyards',
-            'organizations' => $this->access->organizations(),
-        ]);
-    }
-
-    public function create(Request $request): RedirectResponse
-    {
-        abort_unless($this->access->platformAdmin($request->user()), 403);
-        $data = $request->validate([
-            'name' => 'required|string|max:255',
-            'slug' => ['required', 'max:100', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/D', 'unique:galangantbls,slug'],
-        ]);
-        $id = (string) Str::ulid();
-        DB::transaction(function () use ($request, $data, $id): void {
-            DB::table('galangantbls')->insert($data + ['id' => $id, 'created_at' => now(), 'updated_at' => now()]);
-            Audit::record($request->user(), 'organization.created', $id, target: $id, changes: $data);
-        });
-
-        return redirect()->route('master.shipyards')->with('notice', 'Galangan dibuat.');
-    }
-
     public function directory(Request $request, string $organization): Response
     {
         $org = $this->managedOrganization($request, $organization);
@@ -104,7 +66,7 @@ class OrganizationController extends Controller
         $actions = $request->validate(['actions' => 'present|array', 'actions.*' => ['distinct', Rule::in(array_keys(Access::ACTIONS))]])['actions'];
 
         DB::transaction(function () use ($request, $org, $role, $actions): void {
-            DB::table('galangantbls')->where('id', $org->id)->lockForUpdate()->first();
+            $this->access->lockOrganization($org->id);
             $this->access->lockRoles([$role], 'role');
             $before = $this->access->actions($org->id, $role);
             DB::table('galangan_premissiontbls')->updateOrInsert(
@@ -126,7 +88,7 @@ class OrganizationController extends Controller
         $expires = now()->addHours(48);
 
         DB::transaction(function () use ($request, $org, $data, $email, $id, $expires): void {
-            DB::table('galangantbls')->where('id', $org->id)->lockForUpdate()->first();
+            $this->access->lockOrganization($org->id);
             $this->access->lockRoles([$data['role']], 'role');
             $this->invitedUser($email, $org->id, lock: true);
             DB::table('invitations')->where('galangan_id', $org->id)->where('email', $email)
@@ -148,8 +110,9 @@ class OrganizationController extends Controller
     public function invitationPage(Request $request, string $invitation): Response
     {
         $record = $this->pendingInvitation($invitation);
-        $org = DB::table('galangantbls')->where('id', $record->galangan_id)->first();
-        $user = User::query()->where('email', $record->email)->first();
+        $org = $this->access->shipyards()->where('id', $record->galangan_id)->first();
+        $user = User::withTrashed()->where('email', $record->email)->first();
+        abort_if(! $org || $user?->trashed(), 404);
         abort_if($user && $user->galangan_id !== $record->galangan_id, 403, 'Akun email ini sudah terdaftar di luar galangan ini.');
 
         return Inertia::render('Auth', [
@@ -167,7 +130,7 @@ class OrganizationController extends Controller
         $record = $this->pendingInvitation($invitation);
         try {
             $user = DB::transaction(function () use ($request, $invitation, $record): User {
-                DB::table('galangantbls')->where('id', $record->galangan_id)->lockForUpdate()->first();
+                $this->access->lockOrganization($record->galangan_id);
                 $record = $this->pendingInvitation($invitation, true);
                 $user = $this->invitedUser($record->email, $record->galangan_id, lock: true);
                 if ($user) {
@@ -209,7 +172,7 @@ class OrganizationController extends Controller
         $data = $request->validate(['role' => ['required', Rule::in(array_keys($this->access->roles()))], 'active' => 'required|boolean']);
         $data['active'] = (bool) $data['active'];
         DB::transaction(function () use ($request, $org, $member, $data): void {
-            DB::table('galangantbls')->where('id', $org->id)->lockForUpdate()->first();
+            $this->access->lockOrganization($org->id);
             $this->access->lockRoles([$data['role']], 'role');
             $user = User::query()->where('galangan_id', $org->id)->whereKey($member)->lockForUpdate()->firstOrFail();
             $before = ['role' => $user->kode_role, 'active' => $user->keanggotaan_aktif];
@@ -234,29 +197,6 @@ class OrganizationController extends Controller
             ->with('notice', 'Keanggotaan diperbarui.');
     }
 
-    public function account(Request $request, string $account): RedirectResponse
-    {
-        abort_unless($this->access->platformAdmin($request->user()), 403);
-        $data = $request->validate(['active' => 'required|boolean']);
-        $active = (bool) $data['active'];
-        abort_if(! $active && $account === $request->user()->id, 422, 'Akun yang sedang digunakan harus tetap aktif.');
-
-        DB::transaction(function () use ($request, $account, $active): void {
-            User::query()->where('kode_role', 'platform_admin')->orderBy('id')->lockForUpdate()->get();
-            abort_unless($request->user()->fresh()?->active, 403);
-            $user = User::query()->whereKey($account)->lockForUpdate()->firstOrFail();
-            $before = $user->active;
-            $user->forceFill(['active' => $active, 'remember_token' => Str::random(60)])->save();
-            if (! $active) {
-                $user->tokens()->delete();
-                DB::table('sessions')->where('user_id', $user->id)->delete();
-            }
-            Audit::record($request->user(), 'account.status_changed', target: $account, changes: ['before' => $before, 'after' => $active]);
-        });
-
-        return back()->with('notice', 'Status akun diperbarui.');
-    }
-
     private function managedOrganization(Request $request, string $slug): object
     {
         $organization = $this->access->organization($request->user(), $slug);
@@ -276,7 +216,10 @@ class OrganizationController extends Controller
 
     private function invitedUser(string $email, string $organization, bool $lock = false): ?User
     {
-        $user = User::query()->where('email', $email)->when($lock, fn ($query) => $query->lockForUpdate())->first();
+        $user = User::withTrashed()->where('email', $email)->when($lock, fn ($query) => $query->lockForUpdate())->first();
+        if ($user?->trashed()) {
+            throw ValidationException::withMessages(['email' => 'Email terdaftar pada akun yang sudah dihapus.']);
+        }
         if ($user && $user->galangan_id !== $organization) {
             throw ValidationException::withMessages(['email' => 'Akun email ini sudah terdaftar di luar galangan ini.']);
         }

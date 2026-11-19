@@ -49,7 +49,10 @@ class DevelopmentSeeder extends Seeder
     private function account(string $alias, string $name, string $password, string $role, ?string $organization = null, ?User $admin = null): User
     {
         $email = $alias.'@demo.monitoring.test';
-        $user = User::query()->where('email', $email)->lockForUpdate()->first();
+        $user = User::withTrashed()->where('email', $email)->lockForUpdate()->first();
+        if ($user?->trashed()) {
+            throw new RuntimeException("Email demo {$email} terdaftar pada akun yang sudah dihapus.");
+        }
         if ($user) {
             $seeded = DB::table('audit_events')->where('action', 'demo.account_created')
                 ->where('target_id', $user->id)->where('changes->email', $email)->exists();

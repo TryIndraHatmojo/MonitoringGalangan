@@ -19,9 +19,11 @@ type Props = {
 };
 
 function Assignments({ members, assignments, project, url }: Pick<Props, 'members' | 'assignments' | 'project'> & { url: string }) {
+    const eligible = new Set(members.map((member) => member.id));
     const form = useInertiaForm({
-        members: assignments.filter((member) => members.some((record) => record.id === member.user_id)).map((member) => ({ id: member.user_id, is_pic: Boolean(member.is_pic) })),
-        manager_id: project.manager_id ?? '', baseline_approver_id: project.baseline_approver_id ?? '',
+        members: assignments.filter((member) => eligible.has(member.user_id)).map((member) => ({ id: member.user_id, is_pic: Boolean(member.is_pic) })),
+        manager_id: project.manager_id && eligible.has(project.manager_id) ? project.manager_id : '',
+        baseline_approver_id: project.baseline_approver_id && eligible.has(project.baseline_approver_id) ? project.baseline_approver_id : '',
     }, z.object({
         members: z.array(z.object({ id: z.ulid(), is_pic: z.boolean() })).max(300),
         manager_id: optionalId, baseline_approver_id: optionalId,

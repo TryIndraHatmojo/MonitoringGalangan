@@ -110,7 +110,7 @@ class ProjectController extends Controller
         $id = (string) Str::ulid();
 
         DB::transaction(function () use ($request, $org, $data, $id): void {
-            DB::table('galangantbls')->where('id', $org->id)->lockForUpdate()->first();
+            $this->access->lockOrganization($org->id);
             if (DB::table('projects')->where('galangan_id', $org->id)->where('number', $data['number'])->exists()) {
                 throw ValidationException::withMessages(['number' => 'Nomor proyek sudah dipakai di organisasi ini.']);
             }
@@ -131,7 +131,7 @@ class ProjectController extends Controller
         }
 
         DB::transaction(function () use ($request, $org, $project, $data): void {
-            DB::table('galangantbls')->where('id', $org->id)->lockForUpdate()->first();
+            $this->access->lockOrganization($org->id);
             $before = DB::table('projects')->where('id', $project)->lockForUpdate()->first();
             if (DB::table('projects')->where('galangan_id', $org->id)->where('number', $data['number'])->where('id', '!=', $project)->exists()) {
                 throw ValidationException::withMessages(['number' => 'Nomor proyek sudah dipakai di organisasi ini.']);

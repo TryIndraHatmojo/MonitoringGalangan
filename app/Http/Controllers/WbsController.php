@@ -68,7 +68,8 @@ class WbsController extends Controller
             'roles' => $this->access->roles(),
             'methods' => $manage ? WbsTemplates::methods() : [],
             'members' => ($manage || $access) ? $this->baselines->roster($record)->orderBy('users.name')->get(['users.id', 'users.name', 'project_members.is_pic']) : [],
-            'readers' => $access ? DB::table('wbs_readers')->where('project_id', $project)->pluck('user_id') : [],
+            'readers' => $access ? DB::table('wbs_readers')->where('project_id', $project)
+                ->whereIn('user_id', $this->baselines->roster($record)->select('users.id'))->pluck('user_id') : [],
             'can' => compact('manage', 'access', 'submit', 'approve'),
         ]);
     }
