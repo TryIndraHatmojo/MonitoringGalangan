@@ -11,6 +11,8 @@ scripts:
       pm.test('Profil berada dalam organisasi token', () => {
         pm.response.to.have.status(200);
         const { data } = pm.response.json();
-        pm.expect(data.organization.slug).to.eql(pm.environment.get('organization'));
+        const organization = pm.environment.get('organization');
+        pm.expect(data.organization.slug).to.be.a('string').and.not.empty;
+        if (organization) pm.expect(data.organization.slug).to.eql(organization);
         pm.expect(data.permissions).to.be.an('array').that.includes('projects.view');
       });

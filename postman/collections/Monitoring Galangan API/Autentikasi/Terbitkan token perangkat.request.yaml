@@ -1,5 +1,5 @@
 $kind: http-request
-description: Penerbitan ulang untuk perangkat yang sama mengganti token sebelumnya.
+description: Akun biasa memakai galangan akun jika slug tidak dikirim. Administrator Pusat wajib memilih slug galangan. Penerbitan ulang mengganti token perangkat untuk galangan tersebut.
 url: '{{baseUrl}}/auth/tokens'
 method: POST
 headers:
@@ -15,10 +15,11 @@ order: 1000
 scripts:
   - type: beforeRequest
     code: |-
+      const organization = pm.environment.get('organization');
       pm.request.body.update(JSON.stringify({
         email: pm.environment.get('email'),
         password: pm.environment.get('password'),
-        organization: pm.environment.get('organization'),
+        ...(organization ? { organization } : {}),
         device_id: pm.environment.get('deviceId'),
         device_name: 'Postman lokal',
       }));

@@ -14,7 +14,10 @@ paths:
       operationId: issueDeviceToken
       summary: Terbitkan token perangkat
       tags: [Autentikasi]
-      description: Penerbitan ulang untuk perangkat yang sama mengganti token sebelumnya. Batas 10 permintaan per menit per IP.
+      description: >
+        Akun biasa memakai galangan yang ditetapkan pada akun. Jika dikirim, slug organization harus cocok.
+        Administrator Pusat wajib mengirim slug galangan. Penerbitan ulang untuk perangkat yang sama
+        mengganti token sebelumnya dalam galangan tersebut. Batas 10 permintaan per menit per IP.
       security: []
       requestBody:
         required: true
@@ -22,12 +25,20 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/DeviceLogin'
-            example:
-              email: admin@example.test
-              password: '<sandi-lokal>'
-              organization: ferry-demo
-              device_id: postman-local
-              device_name: Postman lokal
+            examples:
+              akunGalangan:
+                value:
+                  email: planner.ferry@demo.monitoring.test
+                  password: '<sandi-lokal>'
+                  device_id: postman-local
+                  device_name: Postman lokal
+              administratorPusat:
+                value:
+                  email: admin@demo.monitoring.test
+                  password: '<sandi-lokal>'
+                  organization: ferry-demo
+                  device_id: postman-local
+                  device_name: Postman lokal
       responses:
         '201':
           description: Token terbit. Simpan nilai token saat diterima.
@@ -278,11 +289,14 @@ components:
   schemas:
     DeviceLogin:
       type: object
-      required: [email, password, organization, device_id, device_name]
+      required: [email, password, device_id, device_name]
       properties:
         email: {type: string, format: email, maxLength: 255}
         password: {type: string, format: password, maxLength: 255, writeOnly: true}
-        organization: {type: string, maxLength: 100}
+        organization:
+          type: [string, 'null']
+          maxLength: 100
+          description: Wajib untuk Administrator Pusat. Jika dikirim akun biasa, harus sama dengan slug galangan akun.
         device_id: {type: string, maxLength: 100}
         device_name: {type: string, maxLength: 150}
     Project:
