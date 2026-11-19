@@ -4,22 +4,27 @@ import { Popover } from 'radix-ui';
 import { useEffect, useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import type { Organization } from '@/ui';
 
-type ProjectOption = { id: string; ship_name: string; number: string };
+type ProjectOption = { id: string; ship_name: string; number: string; organization_name: string };
 type Options = { data: ProjectOption[]; next_page_url: string | null };
-export type ProjectContext = {
-    page: 'projects' | 'profile' | 'builder';
-    active: (ProjectOption & { canOpenBuilder: boolean }) | null;
-    canManageOrganization: boolean;
+export type ActiveProject = {
+    id: string;
+    ship_name: string;
+    number: string;
+    organization: Organization;
+    canOpenBuilder: boolean;
 };
+export type ProjectDestination = 'dashboard' | 'projects' | 'profile' | 'builder' | 'devices'
+    | 'master_users' | 'master_shipyards' | 'master_roles' | 'org_users' | 'org_roles';
 
-export function ProjectCombobox({ base, context, url, beforeChange }: {
-    base: string;
-    context: ProjectContext;
+export function ProjectCombobox({ active, destination, organization, url, beforeChange }: {
+    active: ActiveProject | null;
+    destination: ProjectDestination;
+    organization?: Organization;
     url: string;
     beforeChange?: () => boolean;
 }) {
-    const { active, page: destination } = context;
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
     const [page, setPage] = useState(1);
@@ -39,7 +44,7 @@ export function ProjectCombobox({ base, context, url, beforeChange }: {
         const timer = window.setTimeout(async () => {
             try {
                 const params = new URLSearchParams({ q: query, page: String(page) });
-                const response = await fetch(base + '/project-options?' + params, {
+                const response = await fetch('/project-options?' + params, {
                     headers: { Accept: 'application/json' }, signal: controller.signal,
                 });
                 if (!response.ok) throw new Error();
@@ -56,7 +61,7 @@ export function ProjectCombobox({ base, context, url, beforeChange }: {
             window.clearTimeout(timer);
             controller.abort();
         };
-    }, [base, open, page, query]);
+    }, [open, page, query]);
 
     function loadPage(next: number) {
         setPage(next);
@@ -69,22 +74,29 @@ export function ProjectCombobox({ base, context, url, beforeChange }: {
     function choose(project: ProjectOption) {
         if (switching) return;
         if (project.id === active?.id) {
-            setOpen(false);
-            return;
+            const listPath = '/org/' + active.organization.slug + '/projects';
+            const profilePath = listPath + '/' + active.id;
+            const paths: Partial<Record<ProjectDestination, string>> = { projects: listPath, profile: profilePath, builder: profilePath + '/wbs' };
+            if (!paths[destination] || url.split('?')[0] === paths[destination]) {
+                setOpen(false);
+                return;
+            }
         }
         if (beforeChange && !beforeChange()) return;
 
-        const listFilters: Record<string, string> = {};
-        if (destination === 'projects') {
-            const params = new URLSearchParams(url.split('?')[1]);
-            for (const key of ['q', 'status', 'page']) {
-                const value = params.get(key);
-                if (value) listFilters[key] = value;
-            }
+        const params = new URLSearchParams(url.split('?')[1]);
+        const data: Record<string, string> = { project_id: project.id, destination };
+        const keys = destination === 'projects' ? ['q', 'status', 'page'] : destination === 'master_users' ? ['page'] : [];
+        for (const key of keys) {
+            const value = params.get(key);
+            if (value) data[key] = value;
+        }
+        if (organization && (destination === 'org_users' || destination === 'org_roles')) {
+            data.return_organization = organization.slug;
         }
         setError('');
-        router.post(base + '/active-project', { project_id: project.id, destination, ...listFilters }, {
-            preserveState: false,
+        router.post('/active-project', data, {
+            preserveState: destination !== 'projects' && destination !== 'profile' && destination !== 'builder',
             onStart: () => setSwitching(true),
             onSuccess: () => setOpen(false),
             onError: () => setError('Proyek gagal diganti. Muat ulang halaman dan coba lagi.'),
@@ -100,9 +112,9 @@ export function ProjectCombobox({ base, context, url, beforeChange }: {
         setOpen(next);
     }}>
         <Popover.Trigger asChild>
-            <Button variant="outline" className="project-control" disabled={!active} aria-label={'Kapal aktif: ' + (active?.ship_name ?? 'Belum ada proyek')}>
+            <Button variant="outline" className="project-control" aria-label={active ? 'Kapal aktif: ' + active.ship_name : 'Pilih proyek kapal'}>
                 <span className="project-control-icon"><Ship aria-hidden="true" /></span>
-                <span className="project-control-label"><span>Kapal aktif</span><strong>{active?.ship_name ?? 'Belum ada proyek'}</strong></span>
+                <span className="project-control-label"><span>Kapal aktif</span><strong>{active?.ship_name ?? 'Pilih proyek'}</strong></span>
                 <ChevronDown aria-hidden="true" />
             </Button>
         </Popover.Trigger>
@@ -130,13 +142,15 @@ export function ProjectCombobox({ base, context, url, beforeChange }: {
                     }} />
                 {error && <p className="mt-2 text-sm text-destructive" role="alert">{error}</p>}
                 {loading && <p className="help px-2 py-3" role="status">Memuat proyek…</p>}
-                {!loading && options && !projects.length && <p className="help px-2 py-3" role="status">Proyek tidak ditemukan.</p>}
+                {!loading && options && !projects.length && <p className="help px-2 py-3" role="status">
+                    {query.trim() ? 'Proyek tidak ditemukan.' : 'Belum ada proyek yang dapat Anda akses.'}
+                </p>}
                 <ul id={listId} role="listbox" aria-label="Proyek yang dapat dibuka" className="project-option-list">
                     {projects.map((project, index) => <li key={project.id} id={listId + '-' + project.id} role="option"
                         aria-selected={project.id === active?.id} data-highlighted={index === highlight}
                         onMouseEnter={() => setHighlight(index)} onMouseDown={(event) => event.preventDefault()}
                         onClick={() => choose(project)}>
-                        <strong>{project.ship_name}</strong><span>{project.number}</span>
+                        <strong>{project.ship_name}</strong><span>{project.number} · {project.organization_name}</span>
                     </li>)}
                 </ul>
                 {!loading && (page > 1 || options?.next_page_url) && <div className="project-options-page">

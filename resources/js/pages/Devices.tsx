@@ -7,7 +7,7 @@ import { Section, Shell, formatDate } from '../ui';
 type Device = { id: number; name: string; organization: string; device_id: string; expires_at: string; last_used_at: string | null };
 
 export default function Devices({ devices }: { devices: Device[] }) {
-    return <Shell title="Perangkat API">
+    return <Shell title="Perangkat API" destination="devices">
         <Section title="Token perangkat">
             <DataTable data={devices} rowKey={(device) => String(device.id)} label="Token perangkat"
                 empty="Belum ada token perangkat." columns={[

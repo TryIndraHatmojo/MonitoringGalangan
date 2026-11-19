@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Services\Access;
+use App\Services\ProjectContext;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -16,12 +17,16 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'auth' => function () use ($request): array {
                 $user = $request->user();
+                $access = app(Access::class);
+                $organization = $user ? $access->assignedOrganization($user) : null;
 
                 return [
                     'user' => $user?->only(['id', 'name', 'email', 'platform_admin']),
-                    'organization' => $user ? app(Access::class)->assignedOrganization($user) : null,
+                    'organization' => $organization,
+                    'canManageOrganization' => $organization && $access->admin($user, $organization->id),
                 ];
             },
+            'activeProject' => fn () => app(ProjectContext::class)->active($request),
             'notice' => fn () => $request->session()->get('notice'),
         ];
     }

@@ -1,15 +1,19 @@
 import { Head, Link, usePage } from '@inertiajs/react';
-import { Anchor, ArrowLeft, ArrowRight, Building2, CheckCircle2, CircleAlert, LayoutDashboard, ListTree, LogOut, Server, ShieldCheck, Ship, UserRound } from 'lucide-react';
+import { Anchor, ArrowLeft, ArrowRight, Building2, CheckCircle2, CircleAlert, LayoutDashboard, ListTree, LogOut, Server, Ship, UserRound } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { ProjectCombobox, type ProjectContext } from '@/components/project-combobox';
+import { ProjectCombobox, type ActiveProject, type ProjectDestination } from '@/components/project-combobox';
 
 export type Organization = { id: string; name: string; slug: string };
 export type User = { id: string; name: string; email: string; platform_admin: boolean };
-export type Shared = { auth: { user: User | null; organization: Organization | null }; notice: string | null };
+export type Shared = {
+    auth: { user: User | null; organization: Organization | null; canManageOrganization: boolean };
+    activeProject: ActiveProject | null;
+    notice: string | null;
+};
 export type Page<T> = { data: T[]; prev_page_url: string | null; next_page_url: string | null; current_page: number; last_page: number };
 export type AuditEvent = { id: number; action: string; actor?: string | null; reason?: string | null; target_id?: string | null; changes?: string; created_at: string };
 
@@ -21,21 +25,27 @@ export function organizationUrl(organization: Organization) {
     return '/org/' + organization.slug;
 }
 
-export function Shell({ title, organization, context, actions, beforeProjectChange, children }: {
+export function Shell({ title, organization, destination, actions, beforeProjectChange, children }: {
     title: string;
     organization?: Organization;
-    context?: ProjectContext;
+    destination: ProjectDestination;
     actions?: ReactNode;
     beforeProjectChange?: () => boolean;
-    children: ReactNode;
+    children?: ReactNode;
 }) {
-    const { auth, notice } = useShared();
+    const { auth, activeProject, notice } = useShared();
     const { url } = usePage();
     const currentOrg = organization ?? auth.organization;
-    const orgPath = currentOrg && organizationUrl(currentOrg);
-    const projectPath = orgPath && context?.active && orgPath + '/projects/' + context.active.id;
+    const projectsOrg = currentOrg ?? activeProject?.organization;
+    const orgPath = projectsOrg && organizationUrl(projectsOrg);
+    const directoryPath = auth.organization && organizationUrl(auth.organization) + '/access';
+    const projectPath = activeProject && organizationUrl(activeProject.organization) + '/projects/' + activeProject.id;
     const path = url.split('?')[0];
-    const breadcrumb = context?.page === 'profile' ? 'Ringkasan proyek' : title;
+    const breadcrumb = destination === 'profile' ? 'Ringkasan proyek' : title;
+    const centralMaster = auth.user?.platform_admin;
+    const localMaster = auth.canManageOrganization && directoryPath;
+    const usersPath = centralMaster ? '/data-master/user' : directoryPath && directoryPath + '/users';
+    const rolesPath = centralMaster ? '/data-master/role' : directoryPath;
 
     return <>
         <Head title={title} />
@@ -47,11 +57,18 @@ export function Shell({ title, organization, context, actions, beforeProjectChan
                 </Link>
                 <div className="sidebar-content">
                     <nav aria-label="Navigasi utama">
-                        {auth.user?.platform_admin && <Link href="/" aria-current={path === '/' ? 'page' : undefined}><Building2 />Administrasi galangan</Link>}
-                        {projectPath && <Link href={projectPath} aria-current={path === projectPath ? 'page' : undefined}><LayoutDashboard />Ringkasan proyek</Link>}
+                        <Link href="/" aria-current={path === '/' ? 'page' : undefined}><LayoutDashboard />Dashboard</Link>
                         {orgPath && <Link href={orgPath + '/projects'} aria-current={path === orgPath + '/projects' ? 'page' : undefined}><Ship />Proyek Kapal</Link>}
-                        {projectPath && context?.active?.canOpenBuilder && <Link href={projectPath + '/wbs'} aria-current={path === projectPath + '/wbs' ? 'page' : undefined}><ListTree />Form Builder</Link>}
-                        {orgPath && (context?.canManageOrganization || path === orgPath + '/access') && <Link href={orgPath + '/access'} aria-current={path === orgPath + '/access' ? 'page' : undefined}><ShieldCheck />Hak akses</Link>}
+                        {projectPath && <Link href={projectPath} aria-current={path === projectPath ? 'page' : undefined}><Ship />Ringkasan proyek</Link>}
+                        {projectPath && activeProject?.canOpenBuilder && <Link href={projectPath + '/wbs'} aria-current={path === projectPath + '/wbs' ? 'page' : undefined}><ListTree />Form Builder</Link>}
+                        {(centralMaster || localMaster) && <div className="sidebar-group" role="group" aria-label="Data Master">
+                            <span><Building2 aria-hidden="true" />Data Master</span>
+                            <div>
+                                {usersPath && <Link href={usersPath} aria-current={path === usersPath || (centralMaster && destination === 'org_users') ? 'page' : undefined}>User</Link>}
+                                {centralMaster && <Link href="/data-master/galangan" aria-current={path === '/data-master/galangan' ? 'page' : undefined}>Galangan</Link>}
+                                {rolesPath && <Link href={rolesPath} aria-current={path === rolesPath || (centralMaster && destination === 'org_roles') ? 'page' : undefined}>Role</Link>}
+                            </div>
+                        </div>}
                         <Link href="/devices" aria-current={path === '/devices' ? 'page' : undefined}><Server />Perangkat API</Link>
                     </nav>
                 </div>
@@ -63,7 +80,7 @@ export function Shell({ title, organization, context, actions, beforeProjectChan
             <main className="workspace-main">
                 <div className="workspace-bar">
                     <p className="workspace-crumb"><span>{currentOrg?.name ?? 'Ruang kerja'}</span><strong>{breadcrumb}</strong></p>
-                    {orgPath && context && <ProjectCombobox key={orgPath} base={orgPath} context={context} url={url} beforeChange={beforeProjectChange} />}
+                    <ProjectCombobox active={activeProject} destination={destination} organization={organization} url={url} beforeChange={beforeProjectChange} />
                 </div>
                 <div className="workspace">
                     <header className="workspace-header">

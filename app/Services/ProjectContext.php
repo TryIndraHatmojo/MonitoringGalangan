@@ -6,44 +6,37 @@ use Illuminate\Http\Request;
 
 final class ProjectContext
 {
+    private const SESSION_KEY = 'active_project';
+
     public function __construct(private readonly Access $access) {}
 
-    public function props(Request $request, string $organization, string $page, ?object $project = null): array
+    public function active(Request $request): ?array
     {
         $user = $request->user();
-        $key = $this->sessionKey($organization);
-        if ($project === null) {
-            $projects = $this->access->projects($user, $organization);
-            $last = $request->session()->get($key);
-            $project = $last ? (clone $projects)->where('projects.id', $last)->first() : null;
-            $project ??= $projects->orderByRaw("CASE WHEN status = 'active' THEN 0 ELSE 1 END")
-                ->orderBy('number')->orderBy('projects.id')->first();
+        $selection = $request->session()->get(self::SESSION_KEY);
+        if (! $user || ($selection['user_id'] ?? null) !== $user->id) {
+            return null;
         }
-        if ($project) {
-            $this->remember($request, $organization, $project->id);
-        } else {
-            $request->session()->forget($key);
+        $project = $this->access->selectableProjects($user)->where('projects.id', $selection['project_id'])->first();
+        if (! $project) {
+            return null;
         }
+        $organization = $this->access->organization($user, $project->galangan_id, 'id');
 
         return [
-            'page' => $page,
-            'active' => $project ? [
-                'id' => $project->id,
-                'ship_name' => $project->ship_name,
-                'number' => $project->number,
-                'canOpenBuilder' => $this->access->allows($user, $project, 'wbs.view'),
-            ] : null,
-            'canManageOrganization' => $this->access->admin($user, $organization),
+            'id' => $project->id,
+            'ship_name' => $project->ship_name,
+            'number' => $project->number,
+            'organization' => ['id' => $organization->id, 'name' => $organization->name, 'slug' => $organization->slug],
+            'canOpenBuilder' => $this->access->allows($user, $project, 'wbs.view'),
         ];
     }
 
-    public function remember(Request $request, string $organization, string $project): void
+    public function remember(Request $request, string $project): void
     {
-        $request->session()->put($this->sessionKey($organization), $project);
-    }
-
-    private function sessionKey(string $organization): string
-    {
-        return 'active_projects.'.$organization;
+        $request->session()->put(self::SESSION_KEY, [
+            'user_id' => $request->user()->id,
+            'project_id' => $project,
+        ]);
     }
 }

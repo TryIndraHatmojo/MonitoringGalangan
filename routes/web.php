@@ -18,15 +18,21 @@ Route::get('invitation/{invitation}', [OrganizationController::class, 'invitatio
 Route::post('invitation/{invitation}', [OrganizationController::class, 'accept'])->middleware(['signed', 'throttle:10,1']);
 
 Route::middleware(['auth', ActiveAccount::class])->group(function (): void {
-    Route::get('/', [OrganizationController::class, 'home'])->name('home');
+    Route::inertia('/', 'Dashboard')->name('home');
     Route::post('logout', [AuthController::class, 'logout'])->name('logout');
+    Route::get('data-master/user', [OrganizationController::class, 'masterUsers'])->name('master.users');
+    Route::get('data-master/galangan', [OrganizationController::class, 'masterShipyards'])->name('master.shipyards');
+    Route::get('data-master/role', [OrganizationController::class, 'masterRoles'])->name('master.roles');
     Route::post('org', [OrganizationController::class, 'create']);
     Route::patch('accounts/{account}', [OrganizationController::class, 'account']);
-    Route::get('devices', [DeviceController::class, 'index']);
+    Route::get('devices', [DeviceController::class, 'index'])->name('devices.index');
     Route::delete('devices/{device}', [DeviceController::class, 'revoke']);
+    Route::get('project-options', [ProjectController::class, 'options']);
+    Route::post('active-project', [ProjectController::class, 'select']);
 
     Route::prefix('org/{organization}')->group(function (): void {
         Route::get('access', [OrganizationController::class, 'directory'])->name('org.access');
+        Route::get('access/users', [OrganizationController::class, 'directoryUsers'])->name('org.users');
         Route::put('access/permissions/{role}', [OrganizationController::class, 'permissions']);
         Route::post('access/invitations', [OrganizationController::class, 'invite']);
         Route::patch('access/members/{member}', [OrganizationController::class, 'membership']);

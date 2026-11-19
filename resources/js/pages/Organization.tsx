@@ -5,19 +5,22 @@ import { DataTable } from '@/components/data-table';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useInertiaForm } from '@/lib/inertia-form';
 import { useState } from 'react';
-import { ArrowLeft, Send } from 'lucide-react';
+import { Send } from 'lucide-react';
 import { z } from 'zod';
 import { emailAddress } from '@/lib/validation';
-import { AuditEvent, AuditList, Errors, Field, LinkButton, Organization, Section, Shell, formatDate, organizationUrl } from '../ui';
+import { AuditEvent, AuditList, Errors, Field, Organization, Section, Shell, formatDate, organizationUrl } from '../ui';
 
 type Member = { id: string; name: string; email: string; role: string; active: boolean; account_active: boolean };
-type Props = {
-    organization: Organization; members: Member[];
+type UsersProps = {
+    section: 'users'; organization: Organization; roles: Record<string, string>; members: Member[];
     invitations: { email: string; role: string; expires_at: string }[];
-    roles: Record<string, string>; catalog: Record<string, string>; permissions: Record<string, string[]>; audit: AuditEvent[];
+};
+type RolesProps = {
+    section: 'roles'; organization: Organization; roles: Record<string, string>;
+    catalog: Record<string, string>; permissions: Record<string, string[]>; audit: AuditEvent[];
 };
 
-function MemberRow({ member, roles, url }: { member: Member; roles: Props['roles']; url: string }) {
+function MemberRow({ member, roles, url }: { member: Member; roles: UsersProps['roles']; url: string }) {
     const form = useInertiaForm({ role: member.role, active: Boolean(member.active) }, z.object({
         role: z.string().refine((value) => Object.hasOwn(roles, value), 'Pilih tipe pengguna.'),
         active: z.boolean(),
@@ -32,7 +35,7 @@ function MemberRow({ member, roles, url }: { member: Member; roles: Props['roles
     </TableRow>;
 }
 
-function PermissionEditor({ role, label, catalog, selected, url }: { role: string; label: string; catalog: Props['catalog']; selected: string[]; url: string }) {
+function PermissionEditor({ role, label, catalog, selected, url }: { role: string; label: string; catalog: RolesProps['catalog']; selected: string[]; url: string }) {
     const form = useInertiaForm({ actions: selected }, z.object({
         actions: z.array(z.string().refine((action) => Object.hasOwn(catalog, action), 'Izin tidak tersedia.')),
     }));
@@ -50,14 +53,11 @@ function PermissionEditor({ role, label, catalog, selected, url }: { role: strin
     </form>;
 }
 
-export default function AccessPage({ organization, members, invitations, roles, catalog, permissions, audit }: Props) {
+function Roles({ organization, roles, catalog, permissions, audit }: RolesProps) {
     const url = organizationUrl(organization) + '/access';
-    const invite = useInertiaForm({ email: '', role: 'planner' }, z.object({
-        email: emailAddress, role: z.string().refine((value) => Object.hasOwn(roles, value), 'Pilih tipe pengguna.'),
-    }));
     const [role, setRole] = useState('planner');
 
-    return <Shell title="Hak akses organisasi" organization={organization} actions={<LinkButton variant="outline" href={organizationUrl(organization) + '/projects'}><ArrowLeft />Daftar proyek</LinkButton>}>
+    return <Shell title="Role" organization={organization} destination="org_roles">
         <Section title="Izin per tipe pengguna">
             <div className="stack">
                 <Field label="Tipe pengguna"><NativeSelect value={role} onChange={(event) => setRole(event.target.value)}>
@@ -66,6 +66,17 @@ export default function AccessPage({ organization, members, invitations, roles, 
                 <PermissionEditor key={role} role={role} label={roles[role]} selected={permissions[role]} catalog={catalog} url={url} />
             </div>
         </Section>
+        <Section title="Audit organisasi"><AuditList entries={audit} showChanges /></Section>
+    </Shell>;
+}
+
+function Users({ organization, members, invitations, roles }: UsersProps) {
+    const url = organizationUrl(organization) + '/access';
+    const invite = useInertiaForm({ email: '', role: 'planner' }, z.object({
+        email: emailAddress, role: z.string().refine((value) => Object.hasOwn(roles, value), 'Pilih tipe pengguna.'),
+    }));
+
+    return <Shell title="User" organization={organization} destination="org_users">
         <Section title="Anggota organisasi">
             {members.length ? <Table aria-label="Anggota organisasi"><TableHeader><TableRow>
                 <TableHead scope="col">Anggota</TableHead><TableHead scope="col">Tipe pengguna</TableHead><TableHead scope="col">Keanggotaan</TableHead><TableHead scope="col">Aksi</TableHead>
@@ -90,6 +101,9 @@ export default function AccessPage({ organization, members, invitations, roles, 
                     { id: 'expires', header: 'Kedaluwarsa', cell: ({ row }) => formatDate(row.original.expires_at) },
                 ]} /></div>}
         </Section>
-        <Section title="Audit organisasi"><AuditList entries={audit} showChanges /></Section>
     </Shell>;
+}
+
+export default function AccessPage(props: RolesProps | UsersProps) {
+    return props.section === 'roles' ? <Roles {...props} /> : <Users {...props} />;
 }

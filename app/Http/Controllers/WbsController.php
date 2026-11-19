@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Services\Access;
 use App\Services\Baselines;
-use App\Services\ProjectContext;
 use App\Services\WbsSnapshot;
 use App\Services\WbsTemplates;
 use Illuminate\Http\RedirectResponse;
@@ -17,7 +16,7 @@ use Inertia\Response;
 
 class WbsController extends Controller
 {
-    public function __construct(private readonly Access $access, private readonly Baselines $baselines, private readonly ProjectContext $context) {}
+    public function __construct(private readonly Access $access, private readonly Baselines $baselines) {}
 
     public function show(Request $request, string $organization, string $project): Response
     {
@@ -44,7 +43,6 @@ class WbsController extends Controller
 
         return Inertia::render('Wbs', [
             'organization' => $org,
-            'context' => $this->context->props($request, $org->id, 'builder', $record),
             'project' => Arr::only((array) $record, ['id', 'number', 'name', 'start_date', 'target_date', 'wbs_restricted']),
             'period' => $period,
             'periods' => DB::table('project_periods')->where('project_id', $project)->orderBy('month')

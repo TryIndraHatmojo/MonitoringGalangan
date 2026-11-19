@@ -52,7 +52,12 @@ final class Access
 
     public function roles(): array
     {
-        $roles = DB::table('roletbls')->where('kode', '!=', 'platform_admin')->pluck('nama', 'kode')->all();
+        return array_diff_key($this->roleCatalog(), ['platform_admin' => true]);
+    }
+
+    public function roleCatalog(): array
+    {
+        $roles = DB::table('roletbls')->pluck('nama', 'kode')->all();
 
         return array_replace(array_intersect_key(self::ROLES, $roles), $roles);
     }
@@ -89,7 +94,12 @@ final class Access
 
     public function canAccessOrganization(User $user, string $organization): bool
     {
-        return $user->active && ($user->platform_admin || $this->role($user, $organization) !== null);
+        return $this->platformAdmin($user) || $this->role($user, $organization) !== null;
+    }
+
+    public function platformAdmin(User $user): bool
+    {
+        return $user->active && $user->platform_admin;
     }
 
     public function role(User $user, string $organization): ?string
@@ -101,7 +111,7 @@ final class Access
 
     public function admin(User $user, string $organization): bool
     {
-        return $user->active && ($user->platform_admin || $this->role($user, $organization) === 'administrator');
+        return $this->platformAdmin($user) || $this->role($user, $organization) === 'administrator';
     }
 
     public function actions(string $organization, string $role): array
@@ -148,6 +158,19 @@ final class Access
         abort_unless($result, 404);
 
         return $result;
+    }
+
+    public function selectableProjects(User $user): Builder
+    {
+        if ($this->platformAdmin($user)) {
+            return DB::table('projects');
+        }
+
+        if ($user->active && $user->keanggotaan_aktif && $user->galangan_id !== null) {
+            return $this->projects($user, $user->galangan_id);
+        }
+
+        return DB::table('projects')->whereRaw('1 = 0');
     }
 
     public function allows(User $user, object $project, string $action): bool

@@ -5,21 +5,20 @@ import { Button } from '@/components/ui/button';
 import { useInertiaForm } from '@/lib/inertia-form';
 import { useState } from 'react';
 import { Project, ProjectFields, emptyProject, projectSchema } from '../project-fields';
-import { ArrowRight, Pencil, Plus, Search, Ship, X } from 'lucide-react';
+import { Plus, Search, Ship, X } from 'lucide-react';
 import { z } from 'zod';
 import { Card } from '@/components/ui/card';
-import type { ProjectContext } from '@/components/project-combobox';
-import { Errors, Field, LinkButton, Organization, Page, Pagination, Section, Shell, StatusBadge, formatDate, organizationUrl, projectStatus } from '../ui';
+import { Errors, Field, Organization, Page, Pagination, Section, Shell, StatusBadge, formatDate, organizationUrl, projectStatus } from '../ui';
 
-type Props = { organization: Organization; projects: Page<Project>; context: ProjectContext; canEditProfile: boolean; filters: { q: string; status: string } };
+type Props = { organization: Organization; projects: Page<Project>; canCreate: boolean; filters: { q: string; status: string } };
 
-export default function Projects({ organization, projects, context, canEditProfile, filters }: Props) {
+export default function Projects({ organization, projects, canCreate, filters }: Props) {
     const [creating, setCreating] = useState(false);
     const url = organizationUrl(organization) + '/projects';
     const form = useInertiaForm(emptyProject, projectSchema(true));
     const search = useInertiaForm(filters, z.object({ q: z.string().max(100, 'Pencarian maksimal 100 karakter.'), status: z.string() }));
 
-    return <Shell title="Proyek Kapal" organization={organization} context={context} actions={context.canManageOrganization &&
+    return <Shell title="Proyek Kapal" organization={organization} destination="projects" actions={canCreate &&
         <Button aria-expanded={creating} onClick={() => setCreating(!creating)}>{creating ? <X /> : <Plus />}{creating ? 'Tutup formulir' : 'Proyek baru'}</Button>
     }>
         {creating && <Section title="Proyek baru">
@@ -40,13 +39,10 @@ export default function Projects({ organization, projects, context, canEditProfi
                 <div><Button variant="outline" disabled={search.processing}><Search />Tampilkan</Button></div>
             </form>
         </Section>
-        {projects.data.length === 0 && <p className="empty">{context.active
+        {projects.data.length === 0 && <p className="empty">{filters.q || filters.status
             ? 'Tidak ada proyek yang cocok dengan filter.' : 'Belum ada proyek yang dapat Anda akses.'}</p>}
         <div className="project-cards">
-            {projects.data.map((project) => {
-                const href = url + '/' + project.id;
-
-                return <Card key={project.id} className="project-card">
+            {projects.data.map((project) => <Card key={project.id} className="project-card">
                     <div className="project-card-top">
                         <span className="project-card-icon"><Ship aria-hidden="true" /></span>
                         <StatusBadge status={project.status} />
@@ -61,13 +57,7 @@ export default function Projects({ organization, projects, context, canEditProfi
                         <div><dt>Mulai</dt><dd>{formatDate(project.start_date)}</dd></div>
                         <div><dt>Target selesai</dt><dd>{formatDate(project.target_date)}</dd></div>
                     </dl>
-                    <div className="actions">
-                        <LinkButton href={href} aria-label={'Buka proyek ' + project.ship_name}><ArrowRight />Buka proyek</LinkButton>
-                        {canEditProfile && <LinkButton variant="outline" href={href + '#edit-profil'}
-                            aria-label={'Edit profil ' + project.ship_name}><Pencil />Edit profil</LinkButton>}
-                    </div>
-                </Card>;
-            })}
+                </Card>)}
         </div>
         <Pagination page={projects} />
     </Shell>;

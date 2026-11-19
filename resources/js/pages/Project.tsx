@@ -3,7 +3,6 @@ import { NativeSelect } from '@/components/ui/native-select';
 import { Button } from '@/components/ui/button';
 import { useInertiaForm } from '@/lib/inertia-form';
 import { DataTable } from '@/components/data-table';
-import type { ProjectContext } from '@/components/project-combobox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AuditEvent, AuditList, Errors, Field, LinkButton, Organization, Section, Shell, StatusBadge, formatDate, formatNumber, organizationUrl } from '../ui';
 import { Project, ProjectFields, emptyProject, projectSchema } from '../project-fields';
@@ -15,7 +14,7 @@ type Member = { id: string; name: string; role: string };
 type Assignment = { user_id: string; is_pic: boolean };
 type Document = { id: string; title: string; filename: string; size: number; created_at: string };
 type Props = {
-    organization: Organization; project: Project; context: ProjectContext; can: Record<string, boolean>; members: Member[];
+    organization: Organization; project: Project; can: Record<string, boolean>; members: Member[];
     assignments: Assignment[]; documents: Document[]; audit: AuditEvent[];
 };
 
@@ -74,7 +73,7 @@ function Assignments({ members, assignments, project, url }: Pick<Props, 'member
     </Section>;
 }
 
-export default function ProjectPage({ organization, project, context, can, members, assignments, documents, audit }: Props) {
+export default function ProjectPage({ organization, project, can, members, assignments, documents, audit }: Props) {
     const base = organizationUrl(organization) + '/projects';
     const url = base + '/' + project.id;
     const values = Object.keys(emptyProject).map((key) => [key, String(project[key as keyof typeof emptyProject] ?? '')]);
@@ -84,7 +83,7 @@ export default function ProjectPage({ organization, project, context, can, membe
         file: z.instanceof(File).nullable().refine((file) => file && file.size <= 10 * 1024 * 1024, 'Pilih berkas berukuran maksimal 10 MB.'),
     }));
 
-    return <Shell title={project.name} organization={organization} context={context} actions={<>
+    return <Shell title={project.name} organization={organization} destination="profile" actions={<>
         <LinkButton variant="outline" href={base}><ArrowLeft />Proyek Kapal</LinkButton>
         {can['wbs.view'] && <LinkButton href={url + '/wbs'}><ListTree />Form Builder</LinkButton>}
     </>}>

@@ -35,46 +35,42 @@ class ProjectController extends Controller
 
         return Inertia::render('Projects', [
             'organization' => $org,
-            'context' => $this->context->props($request, $org->id, 'projects'),
-            'canEditProfile' => in_array('projects.manage', $this->access->permissions($user, $org->id), true),
+            'canCreate' => $this->access->admin($user, $org->id),
             'filters' => compact('q', 'status'),
-            'projects' => $this->searchProjects($request, $org->id, $q)->when($status !== '', fn ($query) => $query->where('status', $status))
+            'projects' => $this->searchProjects($this->access->projects($user, $org->id), $q)->when($status !== '', fn ($query) => $query->where('status', $status))
                 ->paginate(25, [
                     'id', 'number', 'name', 'ship_name', 'ship_type', 'shipyard', 'start_date', 'target_date', 'status',
                 ])->withQueryString(),
         ]);
     }
 
-    public function options(Request $request, string $organization): JsonResponse
+    public function options(Request $request, ?string $organization = null): JsonResponse
     {
-        $org = $this->access->organization($request->user(), $organization);
         $data = $request->validate(['q' => 'nullable|string|max:100', 'page' => 'sometimes|integer|min:1']);
-        $options = $this->searchProjects($request, $org->id, $data['q'] ?? '')
-            ->simplePaginate(25, ['id', 'number', 'ship_name'])->withQueryString();
+        $options = $this->searchProjects($this->selectionProjects($request, $organization), $data['q'] ?? '')
+            ->simplePaginate(25, ['projects.id', 'projects.number', 'projects.ship_name', 'galangantbls.name as organization_name'])
+            ->withQueryString();
 
         return response()->json(['data' => $options->items(), 'next_page_url' => $options->nextPageUrl()])
             ->header('Cache-Control', 'no-store');
     }
 
-    public function select(Request $request, string $organization): RedirectResponse
+    public function select(Request $request, ?string $organization = null): RedirectResponse
     {
-        $org = $this->access->organization($request->user(), $organization);
+        $projects = $this->selectionProjects($request, $organization);
         $data = $request->validate($this->filterRules() + [
             'project_id' => 'required|ulid',
-            'destination' => 'required|in:projects,profile,builder',
+            'destination' => 'required|in:dashboard,projects,profile,builder,devices,master_users,master_shipyards,master_roles,org_users,org_roles',
+            'return_organization' => 'required_if:destination,org_users,org_roles|nullable|string|max:100',
             'page' => 'nullable|integer|min:1',
         ]);
-        $project = $this->access->project($request->user(), $org->id, $data['project_id']);
-        $this->context->remember($request, $org->id, $project->id);
+        $project = $projects->where('projects.id', $data['project_id'])->first(['projects.*', 'galangantbls.slug as organization_slug']);
+        abort_unless($project, 404);
 
-        if ($data['destination'] === 'projects') {
-            return redirect()->route('projects.index', ['organization' => $org->slug] + Arr::only($data, ['q', 'status', 'page']), 303);
-        }
-        $route = $data['destination'] === 'builder' && $this->access->allows($request->user(), $project, 'wbs.view')
-            ? 'wbs.show'
-            : 'projects.show';
+        [$route, $parameters] = $this->selectionDestination($request, $project, $data);
+        $this->context->remember($request, $project->id);
 
-        return redirect()->route($route, [$org->slug, $project->id], 303);
+        return redirect()->route($route, $parameters, 303);
     }
 
     public function show(Request $request, string $organization, string $project): Response
@@ -88,7 +84,6 @@ class ProjectController extends Controller
 
         return Inertia::render('Project', [
             'organization' => $org,
-            'context' => $this->context->props($request, $org->id, 'profile', $record),
             'project' => $this->access->serializeProject($user, $record),
             'can' => $can,
             'members' => $can['projects.members']
@@ -258,13 +253,52 @@ class ProjectController extends Controller
         return ['q' => 'nullable|string|max:100', 'status' => 'nullable|in:active,closed,archived'];
     }
 
-    private function searchProjects(Request $request, string $organization, string $query): Builder
+    private function selectionProjects(Request $request, ?string $organization): Builder
     {
-        return $this->access->projects($request->user(), $organization)
+        $user = $request->user();
+        $projects = $organization === null
+            ? $this->access->selectableProjects($user)
+            : $this->access->projects($user, $this->access->organization($user, $organization)->id);
+
+        return $projects->join('galangantbls', 'galangantbls.id', '=', 'projects.galangan_id');
+    }
+
+    private function selectionDestination(Request $request, object $project, array $data): array
+    {
+        $user = $request->user();
+        $destination = $data['destination'];
+        if (in_array($destination, ['org_users', 'org_roles'], true)) {
+            $organization = $this->access->organization($user, $data['return_organization']);
+            abort_unless($this->access->admin($user, $organization->id), 403);
+
+            return [$destination === 'org_users' ? 'org.users' : 'org.access', [$organization->slug]];
+        }
+        if (in_array($destination, ['master_users', 'master_shipyards', 'master_roles'], true)) {
+            abort_unless($this->access->platformAdmin($user), 403);
+        }
+
+        return match ($destination) {
+            'dashboard' => ['home', []],
+            'devices' => ['devices.index', []],
+            'master_users' => ['master.users', Arr::only($data, ['page'])],
+            'master_shipyards' => ['master.shipyards', []],
+            'master_roles' => ['master.roles', []],
+            'projects' => ['projects.index', ['organization' => $project->organization_slug] + Arr::only($data, ['q', 'status', 'page'])],
+            'profile' => ['projects.show', [$project->organization_slug, $project->id]],
+            'builder' => [
+                $this->access->allows($user, $project, 'wbs.view') ? 'wbs.show' : 'projects.show',
+                [$project->organization_slug, $project->id],
+            ],
+        };
+    }
+
+    private function searchProjects(Builder $projects, string $query): Builder
+    {
+        return $projects
             ->when($query !== '', fn ($projects) => $projects->where(function ($projects) use ($query): void {
                 $term = '%'.$query.'%';
-                $projects->whereLike('name', $term)->orWhereLike('number', $term)->orWhereLike('ship_name', $term);
-            }))->orderBy('number')->orderBy('projects.id');
+                $projects->whereLike('projects.name', $term)->orWhereLike('projects.number', $term)->orWhereLike('projects.ship_name', $term);
+            }))->orderBy('projects.number')->orderBy('projects.id');
     }
 
     private function validateProject(Request $request, string $organization, ?string $project = null): array

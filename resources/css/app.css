@@ -77,6 +77,8 @@
 .sidebar nav a { @apply flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-300 hover:bg-(--nav-panel) hover:text-white hover:no-underline; }
 .sidebar nav a[aria-current=page] { @apply bg-(--nav-panel) text-[#c7f7ec]; }
 .sidebar nav svg { @apply size-4 shrink-0; }
+.sidebar-group > span { @apply flex items-center gap-3 px-3 py-2.5 text-sm font-medium; }
+.sidebar-group > div { @apply grid gap-1 ps-7; }
 .sidebar-user { @apply mt-auto flex flex-col items-start gap-2 border-t border-slate-600/50 px-1 pt-4; }
 .sidebar-account { @apply flex min-w-0 items-center gap-2.5 px-2 font-medium break-words; overflow-wrap: anywhere; }
 .account-icon { @apply grid size-8 shrink-0 place-items-center rounded-full bg-(--nav-panel) text-slate-300; }
@@ -181,6 +183,9 @@ td a { @apply font-semibold; }
     .sidebar-content { @apply gap-2; }
     .sidebar nav { @apply flex flex-wrap; }
     .sidebar nav a { @apply gap-1.5 px-2 py-2 text-xs; }
+    .sidebar-group { @apply flex flex-wrap items-center; }
+    .sidebar-group > span { @apply gap-1.5 px-2 py-2 text-xs; }
+    .sidebar-group > div { @apply flex flex-wrap ps-0; }
     .sidebar-user { @apply flex-row items-center justify-between p-0 pt-2; }
     .sidebar-account { @apply px-0; }
     .sidebar-user [data-slot=button] { @apply h-8; }

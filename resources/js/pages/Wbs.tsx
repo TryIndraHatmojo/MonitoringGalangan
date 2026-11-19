@@ -10,7 +10,6 @@ import { z } from 'zod';
 import { DataTable } from '@/components/data-table';
 import { WbsOrder } from '@/components/wbs-order';
 import { WbsTargetChart } from '@/components/wbs-target-chart';
-import type { ProjectContext } from '@/components/project-combobox';
 import { month, readerSettings } from '@/lib/validation';
 import { Errors, Field, LinkButton, Organization, Section, Shell, StatusBadge, formatDate, formatNumber, organizationUrl } from '../ui';
 
@@ -42,7 +41,7 @@ type Revision = { id: string; revision: number; status: string; version: number;
 type Project = { id: string; name: string; number: string; start_date: string; target_date: string; wbs_restricted: boolean };
 type Member = { id: string; name: string; is_pic: boolean };
 type Props = {
-    organization: Organization; project: Project; context: ProjectContext; period: string;
+    organization: Organization; project: Project; period: string;
     periods: { month: string; cutoff_date: string | null; official_baseline_id: string | null }[];
     published: Revision | null; publishedPlan: Plan; draft: Revision | null; working: Snapshot | null; workingPlan: Plan | null;
     history: Revision[]; difference: { added: string[]; removed: string[]; changed: { code: string; fields: string[] }[]; targetsChanged: boolean } | null;
@@ -360,7 +359,7 @@ export default function FormBuilder(props: Props) {
     const editable = props.can.manage && props.draft?.status !== 'submitted';
     const dirtyDraft = useRef(false);
 
-    return <Shell title="Form Builder" organization={props.organization} context={props.context}
+    return <Shell title="Form Builder" organization={props.organization} destination="builder"
         beforeProjectChange={() => !dirtyDraft.current || window.confirm('Tinggalkan draf yang belum disimpan?')}
         actions={<LinkButton variant="outline" href={base}><ArrowLeft />Ringkasan proyek</LinkButton>}>
         <Section>

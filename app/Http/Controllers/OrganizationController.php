@@ -23,24 +23,42 @@ class OrganizationController extends Controller
 {
     public function __construct(private readonly Access $access) {}
 
-    public function home(Request $request): Response|RedirectResponse
+    public function masterUsers(Request $request): Response
     {
-        $user = $request->user();
-        if ($organization = $this->access->assignedOrganization($user)) {
-            return redirect()->route('projects.index', $organization->slug);
-        }
+        abort_unless($this->access->platformAdmin($request->user()), 403);
 
-        return Inertia::render('Home', [
-            'organizations' => $user->platform_admin ? $this->access->organizations() : [],
-            'accounts' => $user->platform_admin
-                ? User::query()->orderBy('name')->orderBy('id')->paginate(30, ['id', 'name', 'email', 'active', 'kode_role'])->withQueryString()
-                : null,
+        return Inertia::render('Master', [
+            'section' => 'users',
+            'organizations' => $this->access->organizations(),
+            'accounts' => User::query()->orderBy('name')->orderBy('id')
+                ->paginate(30, ['id', 'name', 'email', 'active', 'kode_role'])->withQueryString(),
+        ]);
+    }
+
+    public function masterShipyards(Request $request): Response
+    {
+        abort_unless($this->access->platformAdmin($request->user()), 403);
+
+        return Inertia::render('Master', [
+            'section' => 'shipyards',
+            'organizations' => $this->access->organizations(),
+        ]);
+    }
+
+    public function masterRoles(Request $request): Response
+    {
+        abort_unless($this->access->platformAdmin($request->user()), 403);
+
+        return Inertia::render('Master', [
+            'section' => 'roles',
+            'organizations' => $this->access->organizations(),
+            'roles' => $this->access->roleCatalog(),
         ]);
     }
 
     public function create(Request $request): RedirectResponse
     {
-        abort_unless($request->user()->platform_admin, 403);
+        abort_unless($this->access->platformAdmin($request->user()), 403);
         $data = $request->validate([
             'name' => 'required|string|max:255',
             'slug' => ['required', 'max:100', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/D', 'unique:galangantbls,slug'],
@@ -51,7 +69,7 @@ class OrganizationController extends Controller
             Audit::record($request->user(), 'organization.created', $id, target: $id, changes: $data);
         });
 
-        return redirect()->route('projects.index', $data['slug']);
+        return redirect()->route('master.shipyards')->with('notice', 'Galangan dibuat.');
     }
 
     public function directory(Request $request, string $organization): Response
@@ -64,17 +82,29 @@ class OrganizationController extends Controller
         }
 
         return Inertia::render('Organization', [
+            'section' => 'roles',
             'organization' => $org,
-            'members' => $this->access->members($org->id)->orderBy('users.name')
-                ->get(['users.id', 'users.name', 'users.email', 'users.active as account_active', 'users.kode_role as role', 'users.keanggotaan_aktif as active']),
-            'invitations' => DB::table('invitations')->where('galangan_id', $org->id)->whereNull('accepted_at')
-                ->where('expires_at', '>', now())->orderBy('expires_at')->get(['email', 'kode_role as role', 'expires_at']),
             'roles' => $roles,
             'catalog' => Access::ACTIONS,
             'permissions' => $permissions,
             'audit' => DB::table('audit_events')->leftJoin('users', 'users.id', '=', 'audit_events.actor_id')
                 ->where('audit_events.galangan_id', $org->id)->orderByDesc('audit_events.id')->limit(100)
                 ->get(['audit_events.id', 'audit_events.action', 'audit_events.target_id', 'audit_events.changes', 'audit_events.reason', 'audit_events.created_at', 'users.name as actor']),
+        ]);
+    }
+
+    public function directoryUsers(Request $request, string $organization): Response
+    {
+        $org = $this->managedOrganization($request, $organization);
+
+        return Inertia::render('Organization', [
+            'section' => 'users',
+            'organization' => $org,
+            'roles' => $this->access->roles(),
+            'members' => $this->access->members($org->id)->orderBy('users.name')
+                ->get(['users.id', 'users.name', 'users.email', 'users.active as account_active', 'users.kode_role as role', 'users.keanggotaan_aktif as active']),
+            'invitations' => DB::table('invitations')->where('galangan_id', $org->id)->whereNull('accepted_at')
+                ->where('expires_at', '>', now())->orderBy('expires_at')->get(['email', 'kode_role as role', 'expires_at']),
         ]);
     }
 
@@ -180,9 +210,8 @@ class OrganizationController extends Controller
         }
         Auth::login($user);
         $request->session()->regenerate();
-        $slug = DB::table('galangantbls')->where('id', $record->galangan_id)->value('slug');
 
-        return redirect()->route('projects.index', $slug)->with('notice', 'Undangan diterima.');
+        return redirect()->route('home')->with('notice', 'Undangan diterima.');
     }
 
     public function membership(Request $request, string $organization, string $member): RedirectResponse
@@ -218,7 +247,7 @@ class OrganizationController extends Controller
 
     public function account(Request $request, string $account): RedirectResponse
     {
-        abort_unless($request->user()->platform_admin, 403);
+        abort_unless($this->access->platformAdmin($request->user()), 403);
         $data = $request->validate(['active' => 'required|boolean']);
         $active = (bool) $data['active'];
         abort_if(! $active && $account === $request->user()->id, 422, 'Akun yang sedang digunakan harus tetap aktif.');
