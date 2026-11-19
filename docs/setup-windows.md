@@ -112,14 +112,27 @@ composer check-platform-reqs
 php artisan key:generate
 php artisan migrate
 npm.cmd ci
-php artisan monitoring:admin
 ~~~
 
-Perintah terakhir membuat Administrator pusat. Isi email, nama, serta kata sandi minimal 12 karakter. Untuk memuat dua organisasi dan proyek contoh, jalankan perintah berikut setelah akun dibuat. Fixture tidak menggunakan kredensial bawaan.
+Untuk memuat demo pada environment `local`, tambahkan `MONITORING_DEMO_PASSWORD` ke `.env` dan isi dengan kata sandi pilihan Anda sepanjang 12–72 byte. Lalu jalankan perintah berikut.
 
 ~~~powershell
-php artisan db:seed --class=DevelopmentSeeder
+php artisan db:seed
 ~~~
+
+Kelima akun memakai kata sandi tersebut saat pertama dibuat.
+
+| Akun | Akses |
+| --- | --- |
+| admin@demo.monitoring.test | Administrator pusat untuk kedua organisasi |
+| manager.ferry@demo.monitoring.test | Project Manager dan penyetuju baseline Ferry |
+| planner.ferry@demo.monitoring.test | Planner Ferry |
+| pic.ferry@demo.monitoring.test | PIC Lapangan Ferry |
+| viewer.tug@demo.monitoring.test | Viewer proyek Tug |
+
+Seeding ulang mempertahankan kata sandi akun yang sudah ada. Akun biasa langsung membuka Proyek Kapal di galangannya. Administrator Pusat memilih galangan dari halaman administrasi. Untuk menyiapkan administrator pusat bagi instalasi operasional, seed katalog dengan `php artisan db:seed --class=RoleSeeder`, lalu jalankan `php artisan monitoring:admin`.
+
+Untuk membangun ulang database demo, pastikan koneksi mengarah ke database lokal `monitoring_galangan`, lalu jalankan `php artisan migrate:fresh --seed`. Perintah ini menghapus tabel dan isi database tujuan sebelum memuat fixture.
 
 ## 4. Buka dan verifikasi aplikasi
 
@@ -135,7 +148,7 @@ Jalankan Vite pada terminal kedua.
 npm.cmd run dev -- --host 127.0.0.1
 ~~~
 
-Buka `http://127.0.0.1:8000/login`, masuk sebagai Administrator, dan pilih salah satu organisasi. Jika memakai fixture, pilih proyek Ferry dan periode `2026-10` di halaman WBS. Target proyek akan tampil **30,693%**. Periksa juga unduhan dokumen setelah mengunggah berkas dengan akun yang berwenang. Dokumen disimpan di `storage/app/private`.
+Buka `http://127.0.0.1:8000/login`, masuk sebagai Administrator, dan pilih salah satu organisasi. Jika memakai demo, pilih periode `2026-10` di halaman WBS untuk melihat target Ferry **30,693%** dan target Tug **60%**. Target Tug untuk periode `2026-11` adalah **100%**. Periksa juga unduhan dokumen setelah mengunggah berkas dengan akun yang berwenang. Dokumen disimpan di `storage/app/private`.
 
 Jalankan pemeriksaan berikut dari terminal lain. Tes memakai database `monitoring_galangan_test`.
 
@@ -144,7 +157,7 @@ composer lint
 npm.cmd run lint
 npm.cmd run typecheck
 npm.cmd run build
-php artisan test
+php artisan test --testsuite=Feature
 ~~~
 
 Untuk menjalankan aplikasi dengan aset build, hentikan Vite setelah build selesai dan biarkan server PHP berjalan.
