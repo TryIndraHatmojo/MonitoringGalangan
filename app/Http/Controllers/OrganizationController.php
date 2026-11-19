@@ -45,17 +45,6 @@ class OrganizationController extends Controller
         ]);
     }
 
-    public function masterRoles(Request $request): Response
-    {
-        abort_unless($this->access->platformAdmin($request->user()), 403);
-
-        return Inertia::render('Master', [
-            'section' => 'roles',
-            'organizations' => $this->access->organizations(),
-            'roles' => $this->access->roleCatalog(),
-        ]);
-    }
-
     public function create(Request $request): RedirectResponse
     {
         abort_unless($this->access->platformAdmin($request->user()), 403);

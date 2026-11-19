@@ -39,6 +39,10 @@ final class Access
         'audit.view' => 'Lihat audit proyek',
     ];
 
+    public const PLATFORM_ACTIONS = [
+        'roles.manage' => 'Kelola master role',
+    ];
+
     private const DEFAULTS = [
         'manager' => ['projects.view', 'projects.manage', 'projects.members', 'projects.contract', 'documents.view', 'documents.manage', 'wbs.view', 'baselines.approve', 'audit.view'],
         'planner' => ['projects.view', 'documents.view', 'wbs.view', 'wbs.manage', 'wbs.access', 'baselines.submit'],
@@ -100,6 +104,11 @@ final class Access
     public function platformAdmin(User $user): bool
     {
         return $user->active && $user->platform_admin;
+    }
+
+    public function requirePlatform(User $user, string $action): void
+    {
+        abort_unless($this->platformAdmin($user) && isset(self::PLATFORM_ACTIONS[$action]), 403);
     }
 
     public function role(User $user, string $organization): ?string

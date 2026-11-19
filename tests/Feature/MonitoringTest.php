@@ -161,6 +161,96 @@ class MonitoringTest extends TestCase
         $this->assertDatabaseHas('invitations', ['id' => $invitation, 'accepted_at' => null]);
     }
 
+    public function test_platform_administrator_can_create_rename_and_delete_roles_with_audit(): void
+    {
+        $url = '/data-master/role';
+        $admin = $this->admin();
+        $organization = $this->organization('dock-a');
+        $role = ['kode' => 'qc_lapangan', 'nama' => 'QC Lapangan'];
+        $this->actingAs($admin)->from($url);
+        $this->post($url, ['kode' => 'Kode Tidak Valid', 'nama' => ' '])->assertSessionHasErrors(['kode', 'nama']);
+        $this->post($url, $role)->assertRedirect($url)->assertSessionHasNoErrors();
+        $this->post($url, $role)->assertSessionHasErrors('kode');
+        $this->get($url)->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('roles.qc_lapangan', 'QC Lapangan')->where('builtInRoles.0', 'platform_admin'));
+        $this->get('/org/dock-a/access')->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('roles.qc_lapangan', 'QC Lapangan')->where('permissions.qc_lapangan', []));
+        $this->patch($url.'/qc_lapangan', ['kode' => 'other_code', 'nama' => 'Inspektur QC'])->assertRedirect($url);
+        $this->get('/org/dock-a/access/users')->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('roles.qc_lapangan', 'Inspektur QC')->missing('roles.other_code'));
+        $this->delete($url.'/platform_admin')->assertSessionHasErrors('role');
+        $this->assertDatabaseHas('roletbls', ['kode' => 'platform_admin']);
+
+        $this->put('/org/dock-a/access/permissions/qc_lapangan', ['actions' => ['projects.view']])->assertRedirect();
+        $this->delete($url.'/qc_lapangan')->assertRedirect($url)->assertSessionHasNoErrors();
+        $this->assertDatabaseMissing('roletbls', ['kode' => 'qc_lapangan']);
+        $this->assertDatabaseMissing('galangan_premissiontbls', ['galangan_id' => $organization, 'kode_role' => 'qc_lapangan']);
+        $this->get($url)->assertInertia(fn (AssertableInertia $page) => $page->missing('roles.qc_lapangan'));
+        $this->patch($url.'/qc_lapangan', ['nama' => 'Tidak tersedia'])->assertNotFound();
+        foreach (['role.created', 'role.updated', 'role.deleted'] as $action) {
+            $this->assertDatabaseHas('audit_events', [
+                'actor_id' => $admin->id, 'action' => $action, 'target_id' => 'qc_lapangan', 'galangan_id' => null,
+            ]);
+        }
+        $deleted = DB::table('audit_events')->where('action', 'role.deleted')->where('target_id', 'qc_lapangan')->value('changes');
+        $this->assertSame(['projects.view'], json_decode($deleted, true, flags: JSON_THROW_ON_ERROR)['permissions'][$organization]);
+    }
+
+    public function test_organization_roles_cannot_manage_the_shared_role_catalog(): void
+    {
+        $url = '/data-master/role';
+        $a = $this->organization('dock-a');
+        $b = $this->organization('dock-b');
+        $localAdmin = $this->member($a, 'administrator');
+        $planner = $this->member($b, 'planner');
+        $this->actingAs($this->admin())->post($url, ['kode' => 'inspektur', 'nama' => 'Inspektur'])->assertRedirect($url);
+
+        foreach ([$localAdmin, $planner] as $user) {
+            $this->actingAs($user)->get($url)->assertForbidden();
+            $this->post($url, ['kode' => 'role_baru', 'nama' => 'Role Baru'])->assertForbidden();
+            $this->patch($url.'/inspektur', ['nama' => 'Nama Berubah'])->assertForbidden();
+            $this->delete($url.'/inspektur')->assertForbidden();
+        }
+
+        $this->actingAs($localAdmin)->put('/org/dock-b/access/permissions/inspektur', ['actions' => ['projects.view']])->assertNotFound();
+        $this->put('/org/dock-a/access/permissions/inspektur', ['actions' => ['roles.manage']])->assertSessionHasErrors('actions.0');
+        $this->assertDatabaseHas('roletbls', ['kode' => 'inspektur', 'nama' => 'Inspektur']);
+        $this->assertDatabaseMissing('roletbls', ['kode' => 'role_baru']);
+    }
+
+    public function test_role_deletion_preserves_roles_used_by_accounts_invitations_and_baselines(): void
+    {
+        $url = '/data-master/role';
+        $organization = $this->organization('dock-a');
+        $otherOrganization = $this->organization('dock-b');
+        $this->actingAs($this->admin())->from($url);
+        foreach (['qc_akun', 'qc_undangan', 'qc_baseline'] as $code) {
+            $this->post($url, ['kode' => $code, 'nama' => $code])->assertRedirect($url);
+        }
+
+        $this->member($otherOrganization, 'qc_akun');
+        $this->put('/org/dock-a/access/permissions/qc_akun', ['actions' => ['projects.view']])->assertRedirect();
+        DB::table('invitations')->insert([
+            'id' => (string) Str::ulid(), 'email' => 'qc@example.test', 'galangan_id' => $otherOrganization,
+            'kode_role' => 'qc_undangan', 'expires_at' => now()->addHour(),
+        ]);
+        $project = $this->project($otherOrganization);
+        $this->put('/org/dock-b/projects/'.$project.'/wbs/draft', [
+            'effective_month' => '2026-10',
+            'snapshot' => ['nodes' => [[
+                'id' => (string) Str::uuid(), 'type' => 'category', 'code' => 'QC', 'name' => 'QC',
+                'weight' => '100', 'position' => 0, 'reviewer_role' => 'qc_baseline',
+            ]]] + WbsSnapshot::EMPTY,
+        ])->assertSessionHasNoErrors();
+
+        foreach (['qc_akun', 'qc_undangan', 'qc_baseline'] as $code) {
+            $this->delete($url.'/'.$code)->assertSessionHasErrors('role');
+            $this->assertDatabaseHas('roletbls', ['kode' => $code]);
+            $this->assertDatabaseMissing('audit_events', ['action' => 'role.deleted', 'target_id' => $code]);
+        }
+        $this->assertDatabaseHas('galangan_premissiontbls', ['galangan_id' => $organization, 'kode_role' => 'qc_akun']);
+    }
+
     public function test_invitation_creates_account_with_organization_and_role(): void
     {
         $organization = $this->organization('dock-a');

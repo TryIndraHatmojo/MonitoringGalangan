@@ -55,12 +55,13 @@ function PermissionEditor({ role, label, catalog, selected, url }: { role: strin
 
 function Roles({ organization, roles, catalog, permissions, audit }: RolesProps) {
     const url = organizationUrl(organization) + '/access';
-    const [role, setRole] = useState('planner');
+    const [selected, setSelected] = useState('planner');
+    const role = Object.hasOwn(roles, selected) ? selected : 'planner';
 
     return <Shell title="Role" organization={organization} destination="org_roles">
         <Section title="Izin per tipe pengguna">
             <div className="stack">
-                <Field label="Tipe pengguna"><NativeSelect value={role} onChange={(event) => setRole(event.target.value)}>
+                <Field label="Tipe pengguna"><NativeSelect value={role} onChange={(event) => setSelected(event.target.value)}>
                     {Object.entries(roles).map(([code, label]) => <option key={code} value={code}>{label}</option>)}
                 </NativeSelect></Field>
                 <PermissionEditor key={role} role={role} label={roles[role]} selected={permissions[role]} catalog={catalog} url={url} />
