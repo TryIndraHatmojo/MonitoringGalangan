@@ -1,0 +1,13 @@
+/.env*
+/.git/
+/.toolchain/
+/graphify-out/
+/node_modules/
+/vendor/
+/public/build/
+/storage/
+/referensi data/
+/referensi Galangan Control/
+*.private.environment.yaml
+*.key
+auth.json
